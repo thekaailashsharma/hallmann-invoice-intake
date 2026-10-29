@@ -10,7 +10,7 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "178a67c1-ab18-4e28-aaf5-16041afd5a1a",
+      "id": "97dec6c3-9faa-4daa-ba66-3671cbaf7d0e",
       "name": "Decision in",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
@@ -28,7 +28,7 @@
           "queryReplacement": "={{ [ String($json.body.document_id || '').match(/^[0-9a-f-]{36}$/) ? $json.body.document_id : '00000000-0000-0000-0000-000000000000', String($json.body.actor_email || '') ] }}"
         }
       },
-      "id": "1ae1f4b5-f044-49df-8b1d-93d77edf62a4",
+      "id": "97873743-fba4-4117-ba3c-9a56aae23112",
       "name": "Load document + user",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -46,7 +46,7 @@
         "jsCode": "// Deterministic invoice validation. The ONLY gate between the LLM and the ERP.\n// Used verbatim inside the n8n \"Validate\" Code node (synced by scripts/build-workflows.py)\n// and by the review app (so a human correction is checked by the same rules). No imports.\n\nconst ALLOWED_VAT_RATES = { DE: [0, 7, 19], AT: [0, 10, 13, 20], NL: [0, 9, 21], GB: [0, 5, 20], FR: [0, 5.5, 10, 20], ES: [0, 10, 21], IT: [0, 10, 22], PL: [0, 8, 23] };\nconst EU = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']);\nconst VAT_ID_RE = {\n  DE: /^DE\\d{9}$/, AT: /^ATU\\d{8}$/, NL: /^NL\\d{9}B\\d{2}$/, GB: /^GB(\\d{9}|\\d{12})$/, FR: /^FR[A-Z0-9]{2}\\d{9}$/,\n  ES: /^ES[A-Z0-9]\\d{7}[A-Z0-9]$/, IT: /^IT\\d{11}$/, PL: /^PL\\d{10}$/, BE: /^BE0\\d{9}$/, CH: /^CHE\\d{9}(MWST|TVA|IVA)?$/,\n};\nconst AUTO_BOOK_LIMIT = 10000;   // EUR gross. Above this nothing books unattended (same as the clerk approval limit).\nconst MAX_AGE_DAYS = 365;        // older invoices go to a person (closed periods, stale claims)\nconst VAT_PREFIX_ALIAS = { EL: 'GR' };   // Greece uses EL in VAT IDs\nconst BANK_CHANGE = /(neue|geänderte|aktualisierte)\\s+bankverbindung|new bank (details|account)|changed? (our )?bank|bank details have changed|kontoverbindung hat sich geändert/i;\n// Blockers can never be approved: an important field is empty, or the numbers contradict each other (the net/gross mix-up).\n// Every other reason can be accepted by a person with a written note (role rules apply).\nconst BLOCKERS = [/^Supplier name missing/, /number missing/, /^Invoice date missing/, /^Net or gross amount missing/, /^VAT amount missing/, /^Currency missing/,\n  /^Amounts do not add up/, /^VAT \\S+ does not match/, /^Negative amounts/, /^Positive amounts/, /^Gross amount is zero/, /^Due date is before/];\n// Which form field each reason is about, so the screen can outline exactly those fields.\nconst REASON_FIELDS = [[/^Supplier name missing|Hallmann itself/, ['supplier_name']], [/number missing|^Invoice number \\S+ does not appear|corrected re-send/, ['invoice_number']],\n  [/^Invoice date|in the future|older than/, ['invoice_date']], [/^Due date/, ['due_date']], [/^Net or gross amount missing|^Negative amounts|^Positive amounts/, ['net_amount', 'gross_amount']],\n  [/^VAT amount missing/, ['vat_amount']], [/^Currency/, ['currency']], [/VAT ID|^Unknown supplier/, ['supplier_vat_id']], [/^Amounts do not add up/, ['net_amount', 'vat_amount', 'gross_amount']],\n  [/^VAT \\S+ does not match|^VAT rate|charged \\S+% VAT|^0% VAT without/, ['vat_rate', 'vat_amount']], [/^Net amount/, ['net_amount']], [/^Gross amount/, ['gross_amount']], [/^VAT amount \\S+ does not appear/, ['vat_amount']],\n  [/^Only a total is shown/, ['net_amount', 'vat_amount']], [/PO number/, ['po_number']], [/^Credit note does not reference/, ['related_invoice']]];\nconst OVERRIDABLE = [/^Only a total is shown/, /^Currency \\w+: non-EUR/, /^Non-EU supplier/, /^Unknown supplier/, /^Gross amount above/, /^Invoice is older than/, /^0% VAT without/, /^Possible corrected re-send/];\nconst INJECTION_PATTERNS = [\n  /ignoriere? (alle )?(vorherigen|bisherigen|obigen) (anweisungen|anordnungen)/i, /systemhinweis|hinweis für (die )?automatische/i, /automatische[nr]? verarbeitung/i,\n  /als bezahlt (markieren|kennzeichnen)/i, /(betrag|summe|status) auf .{0,20} setzen/i, /nicht (zur|in die) (prüfung|freigabe)/i,\n  /ignore (all |any )?(previous|prior|above) instructions/i, /system (note|prompt|message) for/i, /automated processing/i,\n  /set the (total|amount|status)/i, /do not (send|route|flag).{0,40}(review|human)/i, /mark(ed)? as paid/i, /status to paid/i,\n  /you are (an? )?(ai|assistant|llm)/i, /disregard (the )?(above|previous)/i,\n];\nconst OWN_VAT_ID = 'DE811223344'; // Hallmann Maschinenbau GmbH\n\n/** \"1.234,56\" | \"1,234.56\" | \"1234.56\" | \"-178,50\" → number (or null). */\nfunction parseAmount(v) {\n  if (v === null || v === undefined || v === '') return null;\n  if (typeof v === 'number') return Number.isFinite(v) ? v : null;\n  let s = String(v).trim().replace(/[€$£]|EUR|USD|GBP/gi, '').replace(/\\s/g, '');\n  const neg = /^-|-$|^\\(.*\\)$/.test(s); s = s.replace(/[()-]/g, '');\n  if (/,\\d{1,2}$/.test(s) && !/\\.\\d{1,2}$/.test(s)) s = s.replace(/\\./g, '').replace(',', '.');   // German 1.234,56\n  else if (/^\\d{1,3}(\\.\\d{3})+$/.test(s)) s = s.replace(/\\./g, '');                                  // German 1.000 (thousands only)\n  else s = s.replace(/,/g, '');                                                                  // English 1,234.56\n  const n = Number(s);\n  return Number.isFinite(n) ? (neg ? -n : n) : null;\n}\n/** Accepts ISO, DD.MM.YYYY, DD/MM/YYYY, \"30 September 2026\", \"October 8, 2026\" → YYYY-MM-DD (or null). */\nfunction parseDate(v) {\n  if (!v) return null;\n  const s = String(v).trim().replace(/(\\d{1,2})(st|nd|rd|th)\\b/gi, '$1').replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\\s+/i, '').replace(/\\s+/g, ' ');   // \"7th August 2026\", \"Friday, 7 August\"\n  let m;\n  if ((m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/))) return `${m[1]}-${m[2]}-${m[3]}`;\n  if ((m = s.match(/^(\\d{1,2})[./](\\d{1,2})[./](\\d{4}|\\d{2})$/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; if (+m[2] > 12 || +m[1] > 31) return null; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }\n  const MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12, januar: 1, februar: 2, märz: 3, mai: 5, juni: 6, juli: 7, oktober: 10, dezember: 12,\n    jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, okt: 10, nov: 11, dec: 12, dez: 12 };\n  if ((m = s.match(/^(\\d{1,2})\\.?\\s+([A-Za-zäöü]+)\\.?,?\\s+(\\d{4})$/)) && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;\n  if ((m = s.match(/^([A-Za-z]+)\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})$/)) && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[1].toLowerCase()]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;\n  return null;   // never guess (new Date() would read 10/03 as US and shift by timezone)\n}\n/** Invoice numbers compared as letters+digits only, leading zeros dropped: \"RE 2026-0931\" == \"RE-2026-0931\" == \"Nr. RE20260931\". */\nfunction normInvoiceNo(v) { return v ? String(v).toUpperCase().replace(/^(RECHNUNG(SNUMMER)?|INVOICE|NR|NO|NUMBER)\\.?\\s*:?\\s*/, '').replace(/[^A-Z0-9]/g, '').replace(/^0+(?=\\d)/, '') : null; }\nfunction normIban(v) { return v ? String(v).toUpperCase().replace(/[^A-Z0-9]/g, '') || null : null; }\nconst alnum = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');\n/** Every amount written in the source text, as absolute values rounded to cents. */\nfunction amountsInText(text) {\n  const out = new Set(); const re = /-?\\d{1,3}(?:[.\\s']\\d{3})+(?:,\\d{1,2})?|-?\\d{1,3}(?:,\\d{3})+(?:\\.\\d{1,2})?|-?\\d+(?:[.,]\\d{1,2})?/g;\n  for (const tok of String(text || '').match(re) || []) { const n = parseAmount(tok.replace(/[\\s']/g, '')); if (n !== null) out.add(round2(Math.abs(n))); }\n  return out;\n}\nfunction isOverridable(reason) { return !BLOCKERS.some((re) => re.test(reason)); }\nfunction fieldIssues(reasons, warnings) {\n  const f = {};\n  const add = (r, level) => { for (const [re, keys] of REASON_FIELDS) if (re.test(r)) for (const k of keys) if (!f[k] || (level === 'fix' && f[k].level !== 'fix')) f[k] = { level, message: r }; };\n  for (const r of reasons) add(r, isOverridable(r) ? 'confirm' : 'fix');\n  for (const w of warnings || []) add(w, 'info');\n  return f;\n}\nfunction round2(n) { return Math.round(n * 100) / 100; }\nfunction detectInjection(text) {\n  const hits = INJECTION_PATTERNS.filter((re) => re.test(text || '')).map((re) => re.source);\n  return { flagged: hits.length > 0, patterns: hits };\n}\nfunction normalizeVatId(v) { return v ? String(v).toUpperCase().replace(/[\\s.-]/g, '').replace(/^(USTIDNR|UST-?ID|VATID|VAT):?/, '') || null : null; }\nfunction countryFromVatId(v) { const id = normalizeVatId(v); if (!id || !/^[A-Z]{2}/.test(id)) return null; const p = id.slice(0, 2); return VAT_PREFIX_ALIAS[p] || p; }\n\n/**\n * @param {object} x  extraction from the LLM (strings allowed; this normalises)\n * @param {object} ctx { emailText, existingInvoiceNumbers: Set<string> keyed `${vatId}|${invoiceNumber}` }\n * @returns {{ normalized, reasons: string[], warnings: string[], decision: 'auto_book'|'needs_review'|'duplicate'|'ignore', injection }}\n */\nfunction validateInvoice(x, ctx = {}) {\n  const reasons = [], warnings = [];\n  const docType = ['invoice', 'credit_note'].includes(x.doc_type) ? x.doc_type : 'invoice';\n  const n = {\n    doc_type: docType,\n    supplier_name: (x.supplier_name || '').trim() || null,\n    supplier_vat_id: normalizeVatId(x.supplier_vat_id),\n    invoice_number: (x.invoice_number || '').trim() || null,\n    invoice_date: parseDate(x.invoice_date),\n    due_date: parseDate(x.due_date),\n    currency: (x.currency || '').toUpperCase().trim() || null,\n    po_number: (x.po_number || '').replace(/\\s/g, '') || null,\n    net_amount: parseAmount(x.net_amount),\n    vat_rate: parseAmount(x.vat_rate),\n    vat_amount: parseAmount(x.vat_amount),\n    gross_amount: parseAmount(x.gross_amount),\n    language: x.language || null,\n    related_invoice: (x.related_invoice || '').trim() || null,\n    line_items: Array.isArray(x.line_items) ? x.line_items : [],\n    reverse_charge: Boolean(x.reverse_charge),\n    iban: normIban(x.iban),\n  };\n  n.supplier_country = countryFromVatId(n.supplier_vat_id) || (x.supplier_country || '').toUpperCase() || null;\n  // US suppliers write MM/DD/YYYY: re-read numeric dates in that order when the invoice is clearly American.\n  if (n.supplier_country === 'US' || n.currency === 'USD') for (const k of ['invoice_date', 'due_date']) { const m = String(x[k] || '').trim().match(/^(\\d{1,2})\\/(\\d{1,2})\\/(\\d{4})$/); if (m && +m[1] <= 12) n[k] = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }\n\n  const text = ctx.emailText || '';\n  const injection = detectInjection(text);\n  if (injection.flagged || ctx.guardrailFlagged) reasons.push('Email contains instructions aimed at automated systems (possible manipulation). A person must check the amounts.');\n  if (text && BANK_CHANGE.test(text)) reasons.push('Email announces changed bank details. Verify by phone with the supplier before paying (payment-fraud pattern).');\n\n  // ── required fields ──\n  if (!n.supplier_name) reasons.push('Supplier name missing.');\n  if (!n.invoice_number) reasons.push(docType === 'credit_note' ? 'Credit note number missing.' : 'Invoice number missing.');\n  if (!n.invoice_date) reasons.push('Invoice date missing or unreadable.');\n  // Only a total, no net/VAT breakdown (e.g. foreign contractors): one clear reason, pre-filled net = total and VAT = 0 for a person to confirm.\n  const vatWords = /(mwst|ust\\b|umsatzsteuer|vat|tva|iva|sales tax|\\btax\\b|steuer)/i;\n  const totalOnly = n.gross_amount !== null && ((n.net_amount === null && n.vat_amount === null)\n    || (ctx.emailText && !vatWords.test(ctx.emailText) && !n.vat_amount && (n.net_amount === null || n.net_amount === n.gross_amount)));\n  if (totalOnly) {\n    if (n.vat_rate) { n.net_amount = round2(n.gross_amount / (1 + n.vat_rate / 100)); n.vat_amount = round2(n.gross_amount - n.net_amount); }   // \"119,00 inkl. 19 % MwSt.\"\n    else { n.net_amount = n.gross_amount; n.vat_amount = 0; n.vat_rate = 0; }\n    reasons.push(`Only a total is shown, no net/VAT breakdown. Confirm net and VAT${n.vat_rate ? ` (pre-filled from the stated ${n.vat_rate} %)` : ''}.`);\n  }\n  if (n.net_amount === null || n.gross_amount === null) reasons.push('Net or gross amount missing.');\n  if (n.vat_amount === null) { if (n.net_amount !== null && n.gross_amount !== null) n.vat_amount = round2(n.gross_amount - n.net_amount); else reasons.push('VAT amount missing.'); }\n  if (!n.currency) reasons.push('Currency missing.');\n\n  // ── supplier identity ──\n  const outsideEU = (n.supplier_country && !EU.has(n.supplier_country)) || (!n.supplier_country && n.currency && n.currency !== 'EUR');\n  if (!n.supplier_vat_id) { if (outsideEU) warnings.push('No VAT ID (supplier outside the EU).'); else reasons.push('Supplier VAT ID missing (needed to identify the supplier and detect duplicates).'); }\n  else if (n.supplier_vat_id === OWN_VAT_ID) reasons.push('Supplier VAT ID is our own VAT ID.');\n  else if (VAT_ID_RE[n.supplier_country] && !VAT_ID_RE[n.supplier_country].test(n.supplier_vat_id.replace(/^EL/, 'GR'))) reasons.push(`Supplier VAT ID ${n.supplier_vat_id} has an invalid format for ${n.supplier_country}.`);\n  if (/hallmann/i.test(n.supplier_name || '')) reasons.push('Issuer looks like Hallmann itself (outgoing invoice?).');\n\n  // ── supplier master (only when the caller looked the supplier up) ──\n  if (ctx.supplierChecked && n.supplier_vat_id && n.supplier_vat_id !== OWN_VAT_ID) {\n    const sup = ctx.supplier;\n    if (!sup) reasons.push('Unknown supplier: VAT ID is not in the supplier master. First invoices are checked by a person.');\n    else {\n      if (sup.iban && n.iban && normIban(sup.iban) !== n.iban) reasons.push('IBAN on the invoice differs from the supplier master (possible payment fraud). Verify by phone.');\n      const dom = String(ctx.senderDomain || '').toLowerCase();\n      const allowed = String(sup.sender_domains || '').toLowerCase().split(/[,\\s]+/).filter(Boolean);\n      if (dom && allowed.length && !allowed.includes(dom) && !ctx.forwarded) reasons.push(`Sender domain ${dom} is not a known domain of this supplier.`);\n    }\n  }\n\n  // ── grounding: every key value must literally appear in the email (catches hallucinated or \"recomputed\" numbers) ──\n  if (text) {\n    const nums = amountsInText(text); const T = alnum(text);\n    for (const [k, label] of [['net_amount', 'Net'], ['gross_amount', 'Gross'], ['vat_amount', 'VAT']]) {\n      const v = n[k]; if (v === null || v === 0) continue;\n      if ((k === 'vat_amount' && (x.vat_amount === '' || x.vat_amount == null)) || (totalOnly && k !== 'gross_amount')) continue;   // derived, not extracted\n      if (!nums.has(round2(Math.abs(v)))) reasons.push(`${label} amount ${v} does not appear in the email text.`);\n    }\n    if (n.invoice_number && !T.includes(alnum(n.invoice_number))) reasons.push(`Invoice number ${n.invoice_number} does not appear in the email text.`);\n    if (n.supplier_vat_id && !T.includes(alnum(n.supplier_vat_id))) reasons.push(`VAT ID ${n.supplier_vat_id} does not appear in the email text.`);\n    if (n.iban && !T.includes(n.iban)) reasons.push('IBAN does not appear in the email text.');\n  }\n\n  // ── money: the net/gross/VAT mix-up Sabine mentioned ──\n  if (n.net_amount !== null && n.vat_amount !== null && n.gross_amount !== null) {\n    if (Math.abs(round2(n.net_amount + n.vat_amount) - n.gross_amount) > 0.011) reasons.push(`Amounts do not add up: net ${n.net_amount} + VAT ${n.vat_amount} ≠ gross ${n.gross_amount}.`);\n    if (docType === 'invoice' && (n.net_amount < 0 || n.gross_amount < 0)) reasons.push('Negative amounts on an invoice (is this a credit note?).');\n    if (docType === 'credit_note' && (n.net_amount > 0 || n.gross_amount > 0)) reasons.push('Positive amounts on a credit note.');\n    if (n.gross_amount === 0) reasons.push('Gross amount is zero.');\n    if (ctx.mode === 'intake' && Math.abs(n.gross_amount) > AUTO_BOOK_LIMIT) reasons.push(`Gross amount above ${AUTO_BOOK_LIMIT.toLocaleString('en')} EUR: not booked without a person (policy).`);\n    if (n.vat_rate !== null && n.net_amount !== 0 && !totalOnly) {\n      const expectedVat = round2(n.net_amount * n.vat_rate / 100);\n      if (Math.abs(expectedVat - n.vat_amount) > 0.02) reasons.push(`VAT ${n.vat_amount} does not match ${n.vat_rate}% of net ${n.net_amount} (expected ${expectedVat}).`);\n    } else if (n.vat_rate === null && n.net_amount) {\n      n.vat_rate = round2(n.vat_amount / n.net_amount * 100);\n    }\n    if (n.vat_rate !== null) {\n      const c = n.supplier_country; const allowed = ALLOWED_VAT_RATES[c];\n      if (allowed && !allowed.includes(n.vat_rate)) reasons.push(`VAT rate ${n.vat_rate}% is not a valid rate for ${c}.`);\n      if (c && c !== 'DE' && EU.has(c) && n.vat_rate !== 0) reasons.push(`EU supplier (${c}) charged ${n.vat_rate}% VAT; expected reverse charge at 0%.`);\n      if (c && c !== 'DE' && !EU.has(c) && n.vat_rate !== 0) reasons.push(`Non-EU supplier (${c}) charged ${n.vat_rate}% VAT; needs a tax check.`);\n      if (!totalOnly && n.vat_rate === 0 && n.net_amount !== 0 && !n.reverse_charge && !(c && c !== 'DE' && EU.has(c))) reasons.push('0% VAT without a reverse-charge or exemption note on the invoice.');\n    }\n  }\n  if (n.currency && n.currency !== 'EUR') reasons.push(`Currency ${n.currency}: non-EUR invoices are booked manually (exchange rate, tax).`);\n\n  // ── dates ──\n  if (n.invoice_date && n.due_date && n.due_date < n.invoice_date) reasons.push('Due date is before the invoice date.');\n  if (n.invoice_date && ctx.today && n.invoice_date > ctx.today) reasons.push('Invoice date is in the future.');\n  if (n.invoice_date && ctx.today && (Date.parse(ctx.today) - Date.parse(n.invoice_date)) / 86400000 > MAX_AGE_DAYS) reasons.push(`Invoice is older than ${MAX_AGE_DAYS} days.`);\n  if (n.invoice_date && n.due_date) { const days = (Date.parse(n.due_date) - Date.parse(n.invoice_date)) / 86400000; if (days > 120) warnings.push(`Payment term of ${days} days is unusually long.`); }\n  if (!n.due_date) warnings.push('No due date given.');\n\n  // ── PO ──\n  if (!n.po_number) warnings.push('No purchase order number on the invoice.');\n  else if (!/^\\d{10}$/.test(n.po_number)) warnings.push(`PO number ${n.po_number} does not look like a Hallmann PO (10 digits).`);\n  if (docType === 'credit_note' && !n.related_invoice) warnings.push('Credit note does not reference an invoice.');\n\n  // ── duplicates (against what is already in the ERP / intake) ──\n  // ctx.existing: [{ supplier_vat_id, invoice_number, gross_amount }] already booked or in the queue (any number format).\n  // ctx.existingInvoiceNumbers: legacy Set of `${vat}|${number}` keys.\n  const key = n.supplier_vat_id && n.invoice_number ? `${n.supplier_vat_id}|${normInvoiceNo(n.invoice_number)}` : null;\n  let isDuplicate = false;\n  if (key) {\n    const same = (ctx.existing || []).filter((e) => `${normalizeVatId(e.supplier_vat_id)}|${normInvoiceNo(e.invoice_number)}` === key);\n    for (const k of ctx.existingInvoiceNumbers || []) { const [v, no] = String(k).split('|'); if (`${normalizeVatId(v)}|${normInvoiceNo(no)}` === key) same.push({ gross_amount: null }); }\n    if (same.length) {\n      const g = n.gross_amount;\n      if (g !== null && same.some((e) => e.gross_amount !== null && e.gross_amount !== undefined && Math.abs(Number(e.gross_amount) - g) > 0.011)) reasons.push('Possible corrected re-send: same supplier and invoice number, different amount.');\n      else isDuplicate = true;\n    }\n  }\n\n  let decision = 'auto_book';\n  if (isDuplicate) decision = 'duplicate';\n  else if (reasons.length) decision = 'needs_review';\n  return { normalized: n, reasons, warnings, decision, injection, duplicateKey: key, overridable: reasons.length > 0 && reasons.every(isOverridable),\n    blockers: reasons.filter((r) => !isOverridable(r)), fields: fieldIssues(reasons, warnings) };\n}\n\nif (false) module.exports = { fieldIssues, validateInvoice, parseAmount, parseDate, detectInjection, normalizeVatId, countryFromVatId, normInvoiceNo, amountsInText, isOverridable, OWN_VAT_ID, AUTO_BOOK_LIMIT };\n\n\n// ── glue ──\nconst req = $('Decision in').item.json.body || {};\nconst before = $json;\nconst action = ['approve', 'save', 'reject', 'reopen'].includes(req.action) ? req.action : 'save';\nconst actor = String(req.actor || 'unknown').slice(0, 60);\nconst role = before.actor_role;                       // from app_users, not from the request\nconst note = String(req.note || '').trim().slice(0, 500) || null;\nconst CLERK_LIMIT = 10000;                            // EUR gross; above this a lead or admin approves\nconst no = (code, reason) => ({ json: { ok: false, code, reasons: [reason], action, actor, before } });\nif (!role) return no(403, 'Unknown or inactive user.');\nif (!before.id) return no(404, 'Unknown document.');\nif (action === 'reopen') {\n  if (before.status !== 'rejected') return no(409, 'Only rejected documents can be reopened.');\n  if (role === 'clerk') return no(403, 'Only a lead or admin can reopen a rejected document.');\n  return { json: { ok: true, code: 200, action, actor, role, note, before } };\n}\nif (before.status !== 'needs_review') return no(409, `Document is ${before.status}; it cannot be changed here.`);\nif (action === 'reject') return note ? { json: { ok: true, code: 200, action, actor, role, note, before } } : no(422, 'A reason is required to reject.');\nconst fields = { ...req.fields, doc_type: req.fields?.doc_type || before.doc_type };\nconst r = validateInvoice(fields, { existing: Array.isArray(before.existing) ? before.existing : [], today: new Date().toISOString().slice(0, 10) });\nlet ok = true, code = 200, override = false, forced = false;\nif (action === 'approve') {\n  if (r.decision === 'duplicate') { ok = false; code = 422; r.reasons.unshift('Already in the ERP: this is a duplicate.'); }\n  else if (r.decision === 'needs_review') {\n    if (r.overridable && role !== 'clerk' && note) override = true;\n    else if (req.force === true && role !== 'clerk' && note) { override = true; forced = true; }   // lead/admin forced it through the confirmation popup\n    else { ok = false; code = 422; if (role !== 'clerk') r.reasons.unshift(r.overridable ? 'Add a note to accept these exceptions.' : 'Fix the marked fields, or force it with a note.'); }\n  }\n  if (ok && role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) { ok = false; code = 403; r.reasons.unshift(`Gross amount above ${CLERK_LIMIT.toLocaleString('en')} EUR: a lead must approve this.`); }\n}\nreturn { json: { ok, code, action, actor, role, note: override ? `${forced ? 'FORCED' : 'Accepted'} by ${role}: ${note} | ${forced ? 'Open issues' : 'Exceptions'}: ${r.reasons.join(' | ')}` : note, override, forced, reasons: r.reasons, warnings: r.warnings, normalized: r.normalized, before } };",
         "mode": "runOnceForEachItem"
       },
-      "id": "3d7e81d7-5392-4f58-b285-01e8019e6fdf",
+      "id": "1a4ad49c-5970-4a0c-9e41-242ec1f807b3",
       "name": "Check decision",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -66,7 +66,7 @@
           },
           "conditions": [
             {
-              "id": "c1aec0c3-2874-42a6-a29a-03e8e75fb970",
+              "id": "f58ef58e-0674-4db9-86cd-f1c0b5e25618",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
               "operator": {
@@ -80,7 +80,7 @@
         },
         "options": {}
       },
-      "id": "91ce5712-2619-49de-a7e6-43d80d93635f",
+      "id": "fd5785dc-c146-4da7-a063-6f656f26e6c8",
       "name": "Accepted?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -97,7 +97,7 @@
           "responseCode": "={{ $json.code }}"
         }
       },
-      "id": "0aba2673-eaab-42f5-8741-2c88bc1bae78",
+      "id": "aa38bdad-a85c-4415-ac15-3b55cdb2f89f",
       "name": "Refuse",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -120,7 +120,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "d3ffdee2-8cff-43b6-9591-91ae7464a67d",
+                    "id": "afd1e233-9310-42e1-99d2-0100696bc2f0",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "approve",
                     "operator": {
@@ -144,7 +144,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "e504288b-2e1d-4dbc-ad03-ba2ff0668cd9",
+                    "id": "53bc0fdf-fb60-449d-bcd7-11371c57126d",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "save",
                     "operator": {
@@ -168,7 +168,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "5ffb26ec-423c-40a9-a320-8741083f017c",
+                    "id": "7f4e8345-e9f8-4191-a650-f3a486f99a2b",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "reject",
                     "operator": {
@@ -192,7 +192,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "c85153a5-33ca-419e-8ddd-6d5ff742d940",
+                    "id": "6c1bb369-d558-40e3-93d1-cae4a9c85ec3",
                     "leftValue": "={{ $json.action }}",
                     "rightValue": "reopen",
                     "operator": {
@@ -210,7 +210,7 @@
         },
         "options": {}
       },
-      "id": "1a02523f-89d5-4fcb-a10f-4fa589884634",
+      "id": "2d6ad74a-0921-483b-8813-32926c7700b8",
       "name": "Which action?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -227,7 +227,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.normalized.doc_type, $json.normalized.supplier_name, $json.normalized.supplier_vat_id, $json.normalized.supplier_country, $json.normalized.invoice_number, $json.normalized.invoice_date, $json.normalized.due_date, $json.normalized.currency, $json.normalized.po_number, $json.normalized.net_amount, $json.normalized.vat_rate, $json.normalized.vat_amount, $json.normalized.gross_amount, $json.normalized.related_invoice, JSON.stringify($json.reasons), JSON.stringify($json.warnings), 'pending_erp', $json.actor, ($json.forced ? 'approved_forced' : $json.override ? 'approved_with_exception' : 'approved'), JSON.stringify((({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }) => ({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }))($json.before)), JSON.stringify($json.normalized), ($json.note || 'Approved after review. All checks pass.') ] }}"
         }
       },
-      "id": "1f3d9b16-39e9-472c-bdf2-b180b65845b8",
+      "id": "ffed4472-9761-439f-bef4-632b8f4827dc",
       "name": "Approve → ready to book",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -248,7 +248,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.normalized.doc_type, $json.normalized.supplier_name, $json.normalized.supplier_vat_id, $json.normalized.supplier_country, $json.normalized.invoice_number, $json.normalized.invoice_date, $json.normalized.due_date, $json.normalized.currency, $json.normalized.po_number, $json.normalized.net_amount, $json.normalized.vat_rate, $json.normalized.vat_amount, $json.normalized.gross_amount, $json.normalized.related_invoice, JSON.stringify($json.reasons), JSON.stringify($json.warnings), 'needs_review', $json.actor, 'corrected', JSON.stringify((({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }) => ({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }))($json.before)), JSON.stringify($json.normalized), 'Fields corrected; still open.' ] }}"
         }
       },
-      "id": "152bbfe7-0733-4fb9-b76e-83847f70c2b6",
+      "id": "d31f5630-9769-4c73-ad7e-148c5605b7d8",
       "name": "Save corrections",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -269,7 +269,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.actor, $json.note ] }}"
         }
       },
-      "id": "03688047-fbd9-4eb1-959b-81e01f194547",
+      "id": "03409a1b-4fa3-4879-a98d-05e72b09f079",
       "name": "Mark rejected",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -290,7 +290,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.actor, $json.note ] }}"
         }
       },
-      "id": "4faf7bbc-4059-4bf9-ba13-98ab66cf3579",
+      "id": "2a560ddf-b49c-4b48-b222-1b590afe9aa1",
       "name": "Reopen",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -343,7 +343,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "0a9dbaca-1390-4a23-9090-29d3dd79b163",
+      "id": "a3814a70-d898-49ec-b881-159aad9a4d4f",
       "name": "Book in ERP",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -362,7 +362,7 @@
           "queryReplacement": "={{ [ $('Check decision').item.json.before.id ] }}"
         }
       },
-      "id": "03fefa44-b8b0-46a0-9732-538eeef1c49a",
+      "id": "97864167-2a47-4cec-a2a6-9cd7ecd9b571",
       "name": "Status after booking",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -381,7 +381,7 @@
         "responseBody": "={{ JSON.stringify({ ok: true, status: $json.status || 'pending_erp', message: ({ booked: 'Booked in the ERP.', pending_erp: 'Approved. The ERP is not reachable right now; it will be booked automatically when it is back.', duplicate: 'ERP refused it: this invoice number is already booked.', needs_review: $json.last_error ? 'The ERP refused it; it is back in review: ' + $json.last_error : 'Saved.', rejected: 'Rejected.' })[$json.status] || 'Approved. Booking is queued.' }) }}",
         "options": {}
       },
-      "id": "0be076aa-87dd-465b-be08-8f1d626c7c53",
+      "id": "75cba986-a25b-46d6-8fdc-7c2071f48f95",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -398,7 +398,7 @@
           "responseCode": 500
         }
       },
-      "id": "54532d8a-3359-4e84-8259-abb447d14fc5",
+      "id": "35f24c4c-de88-413c-afdd-21254877fca5",
       "name": "Respond: error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -414,7 +414,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "c3d08a3a-8e6a-4eaa-a41f-7cc50e053fc4",
+      "id": "fb6e95c1-f581-40a5-b06f-58e600938c05",
       "name": "Note 14",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -430,7 +430,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "dbec0fa9-e8c3-4e7b-a9ad-350e574de721",
+      "id": "32df367e-40b5-45dd-b3fb-00216421f1e1",
       "name": "Note 15",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -446,7 +446,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "7724bfc5-45c9-4191-aaff-831020747a44",
+      "id": "cbf07127-41b8-4e3d-a11a-18d710a2ca5e",
       "name": "Note 16",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -462,7 +462,7 @@
         "width": 680,
         "color": 7
       },
-      "id": "f906ee61-ef01-44f0-8953-7747586d8175",
+      "id": "516ef9e7-ea49-41a7-8c6f-cd7b7359eee3",
       "name": "Note 17",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
