@@ -38,6 +38,15 @@ open http://localhost:3001      # review screen        ·  n8n: http://localhost
 
 **Mailbox access.** Gmail/IMAP permissions always cover a whole mailbox, so the real control is a dedicated invoice mailbox set up by Hallmann IT. The Gmail credential uses `gmail.modify` (read + label) instead of n8n's full-access default; the workflow has no send or delete node.
 
+**Assumptions I made where the brief was open**
+- "Several hundred a month" means a few per hour: emails are processed strictly one at a time, so correctness beats speed.
+- An invoice may arrive in the email body (as in the samples), as a PDF, or as an XRechnung/ZUGFeRD e-invoice; all three are handled.
+- "Nothing wrong in the ERP" outranks "books itself": anything the rules cannot prove goes to a person, and auto-booking stops at 10,000 € gross.
+- Jana and Thomas are clerks (approve up to 10,000 €); Sabine is a lead (approves above that, accepts exceptions, reopens rejections). Sign-in is Google with an allow-list.
+- Foreign-currency invoices and non-EU VAT are booked only after a person confirms them.
+- The ERP is unknown, so ERP Booking talks to a mock booking API with the behaviour of a real one (idempotency, 409, 503).
+- "Hear it from you" means e-mail to Avanai on-call today; the channel is configurable.
+
 ## 2. How I know it works
 
 | Suite | What it proves |
@@ -46,6 +55,8 @@ open http://localhost:3001      # review screen        ·  n8n: http://localhost
 | `scripts/e2e.py` (19 emails) | The client's 12 samples + edge cases through a **real mailbox**: duplicates, reminders, credit notes, forwards, injection, PDF-only, proforma, invoice + T&C PDF, look-alike sender, changed IBAN |
 | `scripts/format-test.py` (26 cases) | Real-world layouts: tables, two pages, two VAT rates, Skonto, US/UK/German dates, two-column, French number format, XRechnung, official ZUGFeRD and Factur-X samples, a real Hetzner invoice |
 | `scripts/outage-test.py` | ERP down without notice → waits, one alert, one e-mail; ERP back → booked exactly once, alert closed |
+
+![ERP down, then booked exactly once](docs/img/erp-down.gif)
 
 Also verified by hand: Gmail end to end on a real account (invoice booked, label applied), the review screen flows, forced approval refused by the ERP and logged.
 
@@ -57,6 +68,12 @@ The short version (full list in [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-C
 3. **Dedicated mailbox, real hosting** (server, HTTPS, backups, secrets), supplier master synced nightly from the ERP.
 4. **A pilot on real, anonymised Hallmann invoices** before switching auto-booking on.
 
+## What I propose next
+
+1. **Week 1–2:** connect Hallmann's ERP sandbox and mailbox, EU-hosted model, deploy on a Hallmann/Avanai server.
+2. **Week 3–6, pilot:** real invoices, auto-booking **off**. Every invoice goes to Jana and Thomas, the system shows what it would have done; we measure how often it was right.
+3. **Then:** switch auto-booking on supplier by supplier once the numbers are agreed; Sabine gets a weekly digest (volume, auto-book rate, open items).
+
 ## 4. What I didn't finish
 
 - **Very long invoices** (60+ lines) can still fail extraction and go to a person; needs page-wise extraction.
@@ -64,3 +81,7 @@ The short version (full list in [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-C
 - **Several VAT rates on one invoice** always go to a person; no VAT breakdown yet. Skonto terms are not captured.
 - **Suppliers without a VAT ID** (outside the EU) are matched for duplicates less reliably.
 - **Hosting:** the live demo is the review screen on Vercel, with its API tunnelled to the stack on my machine. It is a demo link, not a deployment.
+
+## Where I used AI coding tools
+
+Built with Claude Code (Anthropic) as a pair programmer: it wrote most of the code (n8n workflow generator, validator and tests, review app, scripts), ran the test suites, and reviewed the design with separate review passes (n8n platform, accounts-payable edge cases, reliability and LLM safety). I made the product and design decisions, set the rules, tested the flows by hand (including Gmail end to end on a real account) and reviewed the output. Inside the product, the AI (Sarvam-105B via n8n's LangChain nodes) only classifies and extracts; it never decides what is booked.

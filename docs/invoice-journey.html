@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice journey — Hallmann Maschinenbau × Avanai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f4ee; --bg2:#eceae4; --card:#ffffff; --ink:#1c1c1e; --muted:#8b8b90; --line:#e2dfd6;
+  --y:#f7d44c; --ys:#fbf1c0; --g:#2f8a4c; --gs:#e3f1e6; --r:#c43d2f; --rs:#f9e3e0; --b:#2d6be5; --bs:#e3ecfc;
+  --amber:#9a7400;
+}
+@page{size:A4 landscape;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg2)}
+body{font-family:"Outfit",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;color:var(--ink);
+  -webkit-print-color-adjust:exact;print-color-adjust:exact;-webkit-font-smoothing:antialiased}
+.page{width:297mm;height:210mm;padding:46px 58px 40px;position:relative;overflow:hidden;background:var(--bg);
+  page-break-after:always;break-after:page;display:flex;flex-direction:column}
+.page:last-child{page-break-after:auto;break-after:auto}
+svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.eyebrow{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);letter-spacing:.02em}
+.logo{width:26px;height:26px;border-radius:7px;background:var(--ink);color:var(--y);font-weight:700;font-size:15px;
+  display:flex;align-items:center;justify-content:center}
+h1{font-size:64px;font-weight:600;letter-spacing:-.035em;line-height:1}
+h2{font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.05}
+.sub{font-size:16px;color:var(--muted);margin-top:8px;font-weight:400}
+.card{background:var(--card);border-radius:22px;box-shadow:0 1px 2px rgba(28,28,30,.04),0 8px 28px rgba(28,28,30,.06)}
+.foot{position:absolute;left:58px;right:58px;bottom:22px;display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);letter-spacing:.02em}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;padding:6px 11px;border-radius:999px;background:var(--bg);color:var(--ink);white-space:nowrap}
+.chip .dot{width:7px;height:7px;border-radius:50%}
+.chip.red{background:var(--rs);color:var(--r)} .chip.amb{background:var(--ys);color:var(--amber)}
+.chip.grn{background:var(--gs);color:var(--g)} .chip.gry{background:var(--bg2);color:#5d5d62}
+.chip.line{background:#fff;border:1px solid var(--line)}
+.chip svg.i{width:13px;height:13px;stroke-width:2}
+
+/* ---------- Page 1 ---------- */
+.p1 .top{display:flex;justify-content:space-between;align-items:flex-start}
+.p1 .hero{margin-top:34px;display:flex;justify-content:space-between;align-items:flex-end}
+.promise{font-size:21px;line-height:1.45;font-weight:400;text-align:right}
+.promise span{display:block} .promise b{font-weight:500}
+.strip{margin-top:0;padding:26px 22px 24px;display:flex;align-items:flex-start}
+.stop{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 4px;min-width:0}
+.stop .n{font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.06em;margin-bottom:10px}
+.stop .ic{width:58px;height:58px;border-radius:18px;background:var(--bg);display:flex;align-items:center;justify-content:center}
+.stop .ic svg.i{width:26px;height:26px}
+.stop .t{margin-top:12px;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.stop .d{margin-top:5px;font-size:11.5px;line-height:1.4;color:var(--muted);max-width:150px}
+.arrow{width:26px;flex:none;margin-top:46px;color:#c9c5ba}
+.stop.ai .ic{background:var(--bs);color:var(--b)}
+.stop.rule .ic{background:var(--ink);color:var(--y)}
+.stop.ok .ic{background:var(--gs);color:var(--g)}
+.or{margin-top:9px;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:var(--amber);background:var(--ys);padding:4px 9px;border-radius:999px}
+.or svg.i{width:12px;height:12px;stroke-width:2}
+.facts{margin-top:20px;display:grid;grid-template-columns:1fr 1.55fr;gap:18px}
+.facts .card{padding:18px 20px}
+.facts h4{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.facts h4 svg.i{width:14px;height:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ---------- Page 2 ---------- */
+.stage{position:relative;height:520px;flex:none;margin-top:auto;margin-bottom:auto}
+.stage svg.paths{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.node{position:absolute;left:0;top:50%;transform:translateY(-50%);width:230px;padding:26px 24px;background:var(--ink);color:#fff;border-radius:22px;
+  box-shadow:0 14px 36px rgba(28,28,30,.18)}
+.node .ic{width:46px;height:46px;border-radius:14px;background:rgba(247,212,76,.14);color:var(--y);display:flex;align-items:center;justify-content:center}
+.node .t{font-size:22px;font-weight:600;margin-top:16px;letter-spacing:-.02em}
+.node .d{font-size:12.5px;color:#a8a8ad;margin-top:6px;line-height:1.45}
+.out{position:absolute;left:452px;right:0;padding:20px 24px;display:flex;gap:18px;align-items:flex-start}
+.out .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex:none}
+.out .t{font-size:21px;font-weight:600;letter-spacing:-.02em}
+.out .d{font-size:13px;color:var(--muted);margin-top:3px}
+.out .chips{margin-top:12px}
+.lbl{position:absolute;font-size:11.5px;font-weight:500;padding:5px 11px;border-radius:999px;background:var(--bg);border:1px solid var(--line);white-space:nowrap;transform:translate(-50%,-50%)}
+.legend{display:flex;gap:16px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:#55555a;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.forced{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;background:var(--ink);color:#fff;padding:2px 6px;border-radius:5px;letter-spacing:.04em}
+
+/* ---------- Page 3 ---------- */
+.tl{margin-top:auto;display:grid;grid-template-columns:repeat(6,1fr);column-gap:14px;position:relative}
+.mock{height:176px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:8px;padding-bottom:26px}
+.rail{grid-column:1/-1;position:relative;height:44px}
+.rail > svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.lab{text-align:center;padding:14px 4px 0}
+.lab .t{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.lab .d{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.4}
+.mini{background:#fff;border-radius:14px;box-shadow:0 1px 2px rgba(28,28,30,.05),0 6px 18px rgba(28,28,30,.07);padding:10px 13px;font-size:12px;display:flex;align-items:center;gap:9px}
+.mini small{display:block;font-size:10px;color:var(--muted);margin-top:1px}
+.btn{background:var(--y);border-radius:999px;padding:9px 16px;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:7px}
+.btn svg.i{width:14px;height:14px;stroke-width:2}
+.code{font-size:34px;font-weight:600;color:var(--r);letter-spacing:-.02em;line-height:1}
+.ddot{width:8px;height:8px;border-radius:50%;flex:none}
+.closing{margin-top:auto;margin-bottom:30px;display:flex;gap:14px}
+.closing .card{flex:1;padding:18px 22px;display:flex;align-items:center;gap:14px}
+.closing .big{font-size:22px;font-weight:600;letter-spacing:-.02em}
+.closing .d{font-size:12px;color:var(--muted);margin-top:2px}
+.closing .ic{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* ---------- Page 4 ---------- */
+.p4grid{margin-top:26px;display:grid;grid-template-columns:1.85fr 1fr;align-items:start;gap:22px;flex:1;min-height:0;margin-bottom:22px}
+.shot{position:relative;border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(28,28,30,.05),0 10px 30px rgba(28,28,30,.10);background:#fff}
+.shot img{display:block;width:100%}
+.badge{position:absolute;top:12px;left:12px;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--y);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(0,0,0,.18)}
+.cap{display:flex;gap:11px;align-items:flex-start;margin-top:12px}
+.cap .num{width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--y);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px}
+.cap .t{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.cap .d{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4}
+.col{display:flex;flex-direction:column;min-height:0}
+.mid{flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:20px}
+
+/* ---------- Page 5 ---------- */
+.tiles{margin-top:0;display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr;gap:16px}
+.tile{padding:24px 24px 24px;min-height:300px;display:flex;flex-direction:column}
+.tile .ic{width:38px;height:38px;border-radius:12px;background:var(--bg);display:flex;align-items:center;justify-content:center}
+.tile .ic svg.i{width:19px;height:19px}
+.tile .num{font-size:76px;font-weight:600;letter-spacing:-.045em;line-height:1;margin-top:16px}
+.tile .t{font-size:14.5px;font-weight:600;margin-top:8px}
+.tile .d{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.4}
+.tile .chips{margin-top:12px;gap:5px}
+.tile .chips .chip{font-size:10.5px;padding:4px 8px}
+.golive{margin-top:34px}
+.golive h3{font-size:12px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.gl{margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.gl .card{padding:14px 18px;display:flex;align-items:center;gap:13px;border-radius:18px;box-shadow:0 1px 2px rgba(28,28,30,.04),0 4px 14px rgba(28,28,30,.05)}
+.gl .ic{width:36px;height:36px;border-radius:11px;background:var(--ys);color:var(--ink);display:flex;align-items:center;justify-content:center;flex:none}
+.gl .ic svg.i{width:18px;height:18px}
+.gl .t{font-size:13.5px;font-weight:500;line-height:1.3}
+</style>
+</head>
+<body>
+
+<!-- Lucide-style icon sprites -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+    <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+    <symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="spark" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0l1.58 6.14a2 2 0 0 0 1.44 1.44l6.14 1.58a.5.5 0 0 1 0 .96l-6.14 1.58a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/></symbol>
+    <symbol id="scale" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="ccheck" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+    <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="server" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+    <symbol id="flask" viewBox="0 0 24 24"><path d="M10 2v7.53a2 2 0 0 1-.21.9L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.07-10.13a2 2 0 0 1-.21-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
+    <symbol id="checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+    <symbol id="plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+    <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+    <symbol id="hdd" viewBox="0 0 24 24"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/></symbol>
+    <symbol id="history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+    <symbol id="cols" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18"/></symbol>
+    <symbol id="pencil" viewBox="0 0 24 24"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></symbol>
+    <symbol id="arrowr" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+    <symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="copy" viewBox="0 0 24 24"><rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></symbol>
+    <symbol id="bank" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="m12 2 8 5H4z"/></symbol>
+    <symbol id="calc" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8"/><path d="M16 14v4"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></symbol>
+  </defs>
+</svg>
+
+<!-- =============== PAGE 1 — COVER =============== -->
+<section class="page p1">
+  <div class="top">
+    <div class="eyebrow"><div class="logo">H</div>Hallmann Maschinenbau &nbsp;×&nbsp; Avanai</div>
+    <div class="eyebrow">How one supplier invoice travels through the system</div>
+  </div>
+  <div class="hero">
+    <div>
+      <h1>Invoice journey</h1>
+      <div class="sub">From the mailbox to the ERP, in six stops.</div>
+    </div>
+    <div class="promise">
+      <span><b>Nothing wrong</b> reaches the ERP.</span>
+      <span><b>Nothing</b> gets lost.</span>
+      <span><b>Every change</b> is traceable.</span>
+    </div>
+  </div>
+
+  <div class="mid">
+  <div class="card strip">
+    <div class="stop"><div class="n">01</div><div class="ic"><svg class="i"><use href="#mail"/></svg></div>
+      <div class="t">Mailbox</div><div class="d">IMAP or Gmail.<br>A dedicated mailbox.</div></div>
+    <svg class="arrow" viewBox="0 0 26 10"><path d="M1 5h22m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="stop"><div class="n">02</div><div class="ic"><svg class="i"><use href="#db"/></svg></div>
+      <div class="t">Store first</div><div class="d">Email + original PDF saved before anything can fail.</div></div>
+    <svg class="arrow" viewBox="0 0 26 10"><path d="M1 5h22m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="stop"><div class="n">03</div><div class="ic"><svg class="i"><use href="#file"/></svg></div>
+      <div class="t">Read</div><div class="d">Every PDF / XML attachment. XRechnung &amp; ZUGFeRD read directly.</div></div>
+    <svg class="arrow" viewBox="0 0 26 10"><path d="M1 5h22m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="stop ai"><div class="n">04</div><div class="ic"><svg class="i"><use href="#spark"/></svg></div>
+      <div class="t">Guard + AI reads</div><div class="d">Checks for manipulation, then sorts the document and extracts the fields.</div></div>
+    <svg class="arrow" viewBox="0 0 26 10"><path d="M1 5h22m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="stop rule"><div class="n">05</div><div class="ic"><svg class="i"><use href="#scale"/></svg></div>
+      <div class="t">Rules decide</div><div class="d">Fixed rules, unit-tested. No AI in this step.</div></div>
+    <svg class="arrow" viewBox="0 0 26 10"><path d="M1 5h22m-4-4 4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="stop ok"><div class="n">06</div><div class="ic"><svg class="i"><use href="#check"/></svg></div>
+      <div class="t">Booked in the ERP</div><div class="d">Real-time API call.<br>Never twice.</div>
+      <div class="or"><svg class="i"><use href="#user"/></svg>or a person reviews</div></div>
+  </div>
+
+  <div class="facts">
+    <div class="card">
+      <h4><svg class="i"><use href="#spark"/></svg>Stop 04 · seven document types</h4>
+      <div class="chips">
+        <span class="chip">Invoice</span><span class="chip">Credit note</span><span class="chip">Reminder</span>
+        <span class="chip">Proforma</span><span class="chip">Order confirmation</span><span class="chip">Statement</span><span class="chip">Other</span>
+      </div>
+    </div>
+    <div class="card">
+      <h4><svg class="i"><use href="#scale"/></svg>Stop 05 · what the rules check</h4>
+      <div class="chips">
+        <span class="chip">Every number appears in the document</span><span class="chip">Net + VAT = gross</span>
+        <span class="chip">VAT rate per country</span><span class="chip">Duplicates, even written differently</span>
+        <span class="chip">Unknown supplier</span><span class="chip">Changed IBAN</span><span class="chip">Look-alike sender</span>
+        <span class="chip amb">Auto-booking only up to 10,000 €</span>
+      </div>
+    </div>
+  </div>
+  </div>
+  <div class="foot"><span>Invoice journey · Hallmann Maschinenbau × Avanai</span><span>1 / 5</span></div>
+</section>
+
+<!-- =============== PAGE 2 — THREE OUTCOMES =============== -->
+<section class="page p2">
+  <div class="eyebrow">After the rules</div>
+  <h2 style="margin-top:10px">Three outcomes. Nothing in between.</h2>
+  <div class="sub">Every document ends in exactly one of these.</div>
+
+  <div class="stage" id="stage">
+    <svg class="paths" viewBox="0 0 1007 520" preserveAspectRatio="none">
+      <g fill="none" stroke-width="2" stroke-linecap="round">
+        <path d="M230 260 C 340 260, 340 62, 452 62" stroke="#2f8a4c"/>
+        <path d="M230 260 C 340 260, 340 238, 452 238" stroke="#d9b21f"/>
+        <path d="M230 260 C 340 260, 340 446, 452 446" stroke="#b9b6ad" stroke-dasharray="5 6"/>
+      </g>
+      <g><circle cx="452" cy="62" r="4.5" fill="#2f8a4c"/><circle cx="452" cy="238" r="4.5" fill="#d9b21f"/><circle cx="452" cy="446" r="4.5" fill="#b9b6ad"/><circle cx="230" cy="260" r="4.5" fill="#1c1c1e"/></g>
+    </svg>
+
+    <div class="node">
+      <div class="ic"><svg class="i"><use href="#scale"/></svg></div>
+      <div class="t">Rules decide</div>
+      <div class="d">No AI. The same document always gets the same answer.</div>
+    </div>
+
+    <span class="lbl" style="left:341px;top:161px;color:#2f8a4c">All checks pass</span>
+    <span class="lbl" style="left:341px;top:249px;color:#9a7400">Anything unclear</span>
+    <span class="lbl" style="left:341px;top:353px;color:#6b6b70">Not an invoice</span>
+
+    <div class="card out" style="top:12px;height:100px;align-items:center">
+      <div class="ic" style="background:var(--gs);color:var(--g)"><svg class="i"><use href="#check"/></svg></div>
+      <div style="flex:1"><div class="t">Booked automatically</div><div class="d">Straight into the ERP, up to 10,000 €. Exactly once.</div></div>
+      <span class="chip grn"><svg class="i"><use href="#check"/></svg>Booked</span>
+    </div>
+
+    <div class="card out" style="top:134px;height:208px">
+      <div class="ic" style="background:var(--ys);color:var(--ink)"><svg class="i"><use href="#user"/></svg></div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="t">A person reviews</div><span class="d" style="margin:0">Review screen · Jana / Thomas</span></div>
+        <div class="chips">
+          <span class="chip red"><svg class="i"><use href="#calc"/></svg>Amounts do not add up</span>
+          <span class="chip line"><svg class="i"><use href="#building"/></svg>Unknown supplier</span>
+          <span class="chip red"><svg class="i"><use href="#bank"/></svg>Changed bank details</span>
+          <span class="chip line"><svg class="i"><use href="#copy"/></svg>Duplicate</span>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--r)"></i>Red: must be fixed</span>
+          <span><i style="background:var(--y)"></i>Amber: accept with a note</span>
+          <span><i style="background:var(--ink)"></i>Force: typed confirmation, logged as <span class="forced">FORCED</span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card out" style="top:366px;height:150px">
+      <div class="ic" style="background:var(--bg2);color:#5d5d62"><svg class="i"><use href="#inbox"/></svg></div>
+      <div style="flex:1">
+        <div class="t">Recorded, never booked</div>
+        <div class="chips">
+          <span class="chip gry">Reminder</span><span class="chip gry">Proforma: not payable</span><span class="chip gry">Statement</span><span class="chip gry">Meeting mail</span>
+        </div>
+        <div class="d" style="margin-top:12px;display:flex;align-items:center;gap:7px"><svg class="i" style="width:14px;height:14px"><use href="#trash"/></svg>Email text deleted after processing (data minimisation).</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>Invoice journey · Hallmann Maschinenbau × Avanai</span><span>2 / 5</span></div>
+</section>
+
+<!-- =============== PAGE 3 — ERP DOWN =============== -->
+<section class="page p3">
+  <div class="eyebrow">Resilience</div>
+  <h2 style="margin-top:10px">When the ERP is down</h2>
+  <div class="sub">The invoice waits. Nobody has to remember it.</div>
+
+  <div class="tl">
+    <!-- mocks -->
+    <div class="mock"><span class="btn"><svg class="i"><use href="#check"/></svg>Approve and book</span></div>
+    <div class="mock">
+      <div class="code">503</div>
+      <div style="font-size:11.5px;color:var(--muted)">or no answer</div>
+    </div>
+    <div class="mock">
+      <span class="chip amb"><svg class="i"><use href="#clock"/></svg>Waiting for ERP</span>
+      <div class="mini"><span class="ddot" style="background:var(--r)"></span><div>ERP unreachable<small>shown in the sidebar</small></div></div>
+    </div>
+    <div class="mock">
+      <div class="mini"><svg class="i" style="width:18px;height:18px;color:var(--ink)"><use href="#mail"/></svg><div>Avanai on-call<small>one e-mail, once</small></div></div>
+    </div>
+    <div class="mock">
+      <svg width="86" height="86" viewBox="0 0 86 86">
+        <circle cx="43" cy="43" r="36" fill="#fff" stroke="#e2dfd6" stroke-width="1.5"/>
+        <path d="M43 7 A36 36 0 0 1 74.2 25" fill="none" stroke="#f7d44c" stroke-width="5" stroke-linecap="round"/>
+        <path d="M43 22v21l12 7" fill="none" stroke="#1c1c1e" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="43" cy="43" r="2.6" fill="#1c1c1e"/>
+      </svg>
+    </div>
+    <div class="mock">
+      <span class="chip grn"><svg class="i"><use href="#check"/></svg>Booked</span>
+      <div class="mini"><span class="ddot" style="background:var(--g)"></span><div>ERP online<small>bookings flowing</small></div></div>
+    </div>
+
+    <!-- rail -->
+    <div class="rail">
+      <svg viewBox="0 0 1007 44" preserveAspectRatio="none">
+        <line x1="78" y1="22" x2="249" y2="22" stroke="#1c1c1e" stroke-width="2"/>
+        <line x1="249" y1="22" x2="420" y2="22" stroke="#c43d2f" stroke-width="2"/>
+        <line x1="420" y1="22" x2="758" y2="22" stroke="#e6c23a" stroke-width="2" stroke-dasharray="4 6"/>
+        <line x1="758" y1="22" x2="929" y2="22" stroke="#2f8a4c" stroke-width="2"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);column-gap:14px;align-items:center;justify-items:center">
+        <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#1c1c1e"/><path d="M14 22.5l5.5 5.5L30 17" fill="none" stroke="#f7d44c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#c43d2f"/><g fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="13" y="13" width="18" height="7" rx="2"/><rect x="13" y="24" width="18" height="7" rx="2"/></g></svg>
+        <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#f7d44c"/><g fill="none" stroke="#1c1c1e" stroke-width="2" stroke-linecap="round"><circle cx="22" cy="22" r="9"/><path d="M22 17v5l3 2"/></g></svg>
+        <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#fbf1c0" stroke="#f7d44c" stroke-width="1.5"/><g fill="none" stroke="#1c1c1e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 19a5 5 0 0 1 10 0c0 6 2.5 7.5 2.5 7.5h-15S17 25 17 19"/><path d="M20.5 29.5a1.7 1.7 0 0 0 3 0"/></g></svg>
+        <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#fbf1c0" stroke="#f7d44c" stroke-width="1.5"/><g fill="none" stroke="#1c1c1e" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 22a8 8 0 0 1 13.7-5.6L30 18.5"/><path d="M30 14v4.5h-4.5"/><path d="M30 22a8 8 0 0 1-13.7 5.6L14 25.5"/><path d="M14 30v-4.5h4.5"/></g></svg>
+        <svg width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#2f8a4c"/><path d="M14 22.5l5.5 5.5L30 17" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+
+    <!-- labels -->
+    <div class="lab"><div class="t">Invoice approved</div><div class="d">Ready to book</div></div>
+    <div class="lab"><div class="t">ERP does not answer</div><div class="d">Error or timeout</div></div>
+    <div class="lab"><div class="t">Waiting for ERP</div><div class="d">Status changes; sidebar turns red</div></div>
+    <div class="lab"><div class="t">Avanai is told</div><div class="d">One e-mail to on-call</div></div>
+    <div class="lab"><div class="t">Retry every 5 min</div><div class="d">Automatic, in the background</div></div>
+    <div class="lab"><div class="t">ERP back</div><div class="d">Booked, alert closes itself</div></div>
+  </div>
+
+  <div class="closing">
+    <div class="card"><div class="ic" style="background:var(--gs);color:var(--g)"><svg class="i"><use href="#check"/></svg></div>
+      <div><div class="big">Booked exactly once</div><div class="d">Never twice, even after many retries.</div></div></div>
+    <div class="card"><div class="ic" style="background:var(--ys);color:var(--ink)"><svg class="i"><use href="#bell"/></svg></div>
+      <div><div class="big">One alert, not a flood</div><div class="d">And it closes itself when the ERP is back.</div></div></div>
+    <div class="card"><div class="ic" style="background:var(--bg2);color:var(--ink)"><svg class="i"><use href="#db"/></svg></div>
+      <div><div class="big">Nothing gets lost</div><div class="d">The invoice is already stored.</div></div></div>
+  </div>
+  <div class="foot"><span>Invoice journey · Hallmann Maschinenbau × Avanai</span><span>3 / 5</span></div>
+</section>
+
+<!-- =============== PAGE 4 — REVIEW SCREEN =============== -->
+<section class="page p4">
+  <div class="eyebrow">For Jana and Thomas</div>
+  <h2 style="margin-top:10px">The review screen</h2>
+
+  <div class="p4grid">
+    <div class="col">
+      <div class="shot"><img src="img/review-split.png" alt="Review screen: original PDF next to the extracted fields"></div>
+      <div class="cap"><span class="num">1</span><div><div class="t">Original next to the fields</div><div class="d">The PDF on the left, what was read on the right. Edit anything.</div></div></div>
+      <div class="card" style="margin-top:22px;padding:16px 20px">
+        <div style="font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">One clear status per invoice</div>
+        <div class="chips">
+          <span class="chip amb"><svg class="i"><use href="#alert"/></svg>Needs review</span>
+          <span class="chip amb"><svg class="i"><use href="#clock"/></svg>Waiting for ERP</span>
+          <span class="chip grn"><svg class="i"><use href="#check"/></svg>Booked</span>
+          <span class="chip red"><svg class="i"><use href="#copy"/></svg>Duplicate</span>
+          <span class="chip gry"><svg class="i"><use href="#mail"/></svg>Not an invoice</span>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="shot"><img src="img/review-checks.png" alt="Checks: fix before booking, accept with a note"></div>
+      <div class="cap"><span class="num">2</span><div><div class="t">Checks update as you type</div><div class="d">Amounts auto-calculate from the gross.</div></div></div>
+      <div class="shot" style="margin-top:16px"><img src="img/review-history.png" alt="History: append-only audit log"></div>
+      <div class="cap"><span class="num">3</span><div><div class="t">Every change is logged</div><div class="d">Append-only: who, when, before and after.</div></div></div>
+    </div>
+  </div>
+  <div class="foot"><span>Invoice journey · Hallmann Maschinenbau × Avanai</span><span>4 / 5</span></div>
+</section>
+
+<!-- =============== PAGE 5 — HOW WE KNOW =============== -->
+<section class="page p5">
+  <div class="eyebrow">Evidence</div>
+  <h2 style="margin-top:10px">How we know it works</h2>
+
+  <div class="mid">
+  <div class="tiles">
+    <div class="card tile"><div class="ic"><svg class="i"><use href="#checks"/></svg></div>
+      <div class="num">30</div><div class="t">Unit tests</div><div class="d">On the rules that decide what gets booked.</div></div>
+    <div class="card tile"><div class="ic"><svg class="i"><use href="#mail"/></svg></div>
+      <div class="num">19</div><div class="t">Emails, end to end</div><div class="d">Sent through a real mailbox, all the way through.</div></div>
+    <div class="card tile"><div class="ic"><svg class="i"><use href="#file"/></svg></div>
+      <div class="num">26</div><div class="t">Cases, many formats</div>
+      <div class="chips">
+        <span class="chip">Tables</span><span class="chip">Multi-page</span><span class="chip">Two VAT rates</span><span class="chip">US dates</span>
+        <span class="chip">Credit notes</span><span class="chip">Proformas</span><span class="chip">Statements</span><span class="chip">XRechnung</span><span class="chip">Official ZUGFeRD samples</span>
+      </div></div>
+    <div class="card tile"><div class="ic"><svg class="i"><use href="#server"/></svg></div>
+      <div class="num" style="display:flex;align-items:center;gap:10px"><svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="27" fill="#e3f1e6"/><path d="M18 30l7.5 7.5L41 22" fill="none" stroke="#2f8a4c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="t">ERP outage test</div><div class="d">ERP switched off, then on again: booked exactly once.</div></div>
+  </div>
+
+  <div class="golive">
+    <h3><svg class="i" style="width:15px;height:15px"><use href="#flask"/></svg>Before go-live</h3>
+    <div class="gl">
+      <div class="card"><div class="ic"><svg class="i"><use href="#plug"/></svg></div><div class="t">Connect Hallmann's ERP</div></div>
+      <div class="card"><div class="ic"><svg class="i"><use href="#globe"/></svg></div><div class="t">EU-hosted AI model</div></div>
+      <div class="card"><div class="ic"><svg class="i"><use href="#inbox"/></svg></div><div class="t">Dedicated invoice mailbox</div></div>
+      <div class="card"><div class="ic"><svg class="i"><use href="#hdd"/></svg></div><div class="t">Real hosting with backups</div></div>
+      <div class="card"><div class="ic"><svg class="i"><use href="#flask"/></svg></div><div class="t">Pilot on real, anonymised invoices</div></div>
+      <div class="card"><div class="ic"><svg class="i"><use href="#refresh"/></svg></div><div class="t">Supplier master synced from the ERP</div></div>
+    </div>
+  </div>
+  </div>
+  <div class="foot"><span>Invoice journey · Hallmann Maschinenbau × Avanai</span><span>5 / 5</span></div>
+</section>
+</body>
+</html>
