@@ -9,7 +9,7 @@ const load = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
 const validator = fs.readFileSync(path.join(__dirname, '..', 'shared', 'validate.js'), 'utf8');
 
 test('five workflows export with stable ids', () => {
-  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-erp-retry.json', '04-review-decision.json', '05-error-handler.json', '06-user-admin.json']);
+  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-erp-retry.json', '04-review-decision.json', '05-error-handler.json']);
   for (const f of files) assert.match(load(f).id, /^Inv[A-Za-z0-9]{14}$/);
 });
 

@@ -4,7 +4,7 @@ The deterministic validator (shared/validate.js) is embedded verbatim into the t
 import json, pathlib, uuid
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 VALIDATE_JS = (ROOT / "shared" / "validate.js").read_text().replace("if (typeof module !== 'undefined') module.exports", "if (false) module.exports")
-IDS = {"intake": "InvIntake00000001", "erp": "InvErpBooking0001", "retry": "InvErpRetry000001", "review": "InvReviewDecision", "errors": "InvErrorHandler01", "users": "InvUserAdmin00001"}
+IDS = {"intake": "InvIntake00000001", "erp": "InvErpBooking0001", "retry": "InvErpRetry000001", "review": "InvReviewDecision", "errors": "InvErrorHandler01"}
 LLM_MODEL = "sarvam-105b-conversations"
 
 def nid(): return str(uuid.uuid4())
@@ -268,23 +268,3 @@ E.link(et, "Record alert")
 E.node("Notify on-call (prod)", "n8n-nodes-base.gmail", 2.1, {"sendTo": "oncall@avanai.example", "subject": "=[Hallmann intake] {{ $('Workflow failed').item.json.workflow.name }} failed", "message": "={{ JSON.stringify($('Workflow failed').item.json, null, 2) }}", "options": {}}, 120, 0, disabled=True)
 E.link("Record alert", "Notify on-call (prod)")
 E.dump("05-error-handler.json")
-
-# ═══════════════════════════════════ F · USER ADMIN (n8n form) ═══════════════════════════════════
-F = WF("User Admin", IDS["users"], {"errorWorkflow": IDS["errors"]})
-F.sticky("## User admin form\nSuper admin adds or removes people without touching the database. The form is protected by n8n Basic Auth (credential \"Super admin (form)\"); every change is audited. Sign-in itself is Google via Firebase; this table decides who gets in and with which role.", -400, -220, 760, 150, 5)
-uf = F.node("User form", "n8n-nodes-base.formTrigger", 2.5, {"formTitle": "Hallmann invoice intake · user admin", "formDescription": "Add a person (they sign in with Google) or remove access.",
-    "formFields": {"values": [
-        {"fieldLabel": "Action", "fieldName": "action", "fieldType": "dropdown", "fieldOptions": {"values": [{"option": "add"}, {"option": "remove"}]}, "requiredField": True},
-        {"fieldLabel": "Email (Google account)", "fieldName": "email", "fieldType": "email", "requiredField": True},
-        {"fieldLabel": "Name", "fieldName": "name", "placeholder": "needed for add"},
-        {"fieldLabel": "Role", "fieldName": "role", "fieldType": "dropdown", "fieldOptions": {"values": [{"option": "clerk"}, {"option": "lead"}, {"option": "admin"}]}}]},
-    "authentication": "basicAuth", "options": {"buttonLabel": "Apply"}}, -360, 0, webhookId="7d3b0a7e-users-00001")
-isadd = if_node(F, "Add?", "={{ $('User form').item.json.action }}", "equals", "add", -120, 0, "string")
-F.link(uf, isadd)
-F.pg("Add / update user", "with u as (insert into app_users (email, display_name, role, active, created_by) values (lower($1), coalesce(nullif($2, ''), split_part($1, '@', 1)), coalesce(nullif($3, ''), 'clerk')::user_role, true, 'n8n form') on conflict (email) do update set display_name = coalesce(nullif($2, ''), app_users.display_name), role = coalesce(nullif($3, ''), app_users.role::text)::user_role, active = true returning email, display_name, role) insert into audit_log (actor, action, note) select 'super admin (form)', 'user_upserted', u.email || ' as ' || u.role from u returning note",
-     "[ $('User form').item.json.email, $('User form').item.json.name || '', $('User form').item.json.role || '' ]", 600, -200)
-F.pg("Remove user", "with u as (update app_users set active = false where email = lower($1) returning email) insert into audit_log (actor, action, note) select 'super admin (form)', 'user_removed', u.email from u returning note", "[ $('User form').item.json.email ]", 600, -40)
-F.link(isadd, "Add / update user", 0); F.link(isadd, "Remove user", 1)
-F.node("Done", "n8n-nodes-base.form", 2.5, {"operation": "completion", "respondWith": "text", "completionTitle": "Applied ✓", "completionMessage": "={{ $json.note || 'No such user.' }} — the person can now sign in with Google (or no longer can).", "options": {}}, 840, -120, webhookId="7d3b0a7e-users-00003")
-F.link("Add / update user", "Done"); F.link("Remove user", "Done")
-F.dump("06-user-admin.json")

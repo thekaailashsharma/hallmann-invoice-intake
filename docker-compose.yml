@@ -59,6 +59,10 @@ services:
       - FIREBASE_SERVICE_ACCOUNT_FILE=/secrets/firebase-service-account.json
       - DEMO_MODE=${DEMO_MODE:-false}
       - CLERK_APPROVAL_LIMIT=${CLERK_APPROVAL_LIMIT:-10000}
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL}
+      - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME}
+      - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS}
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS}
     volumes:
       - ./secrets:/secrets:ro
     restart: unless-stopped

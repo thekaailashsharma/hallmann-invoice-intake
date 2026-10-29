@@ -22,7 +22,12 @@ const N8N = (process.env.N8N_WEBHOOK_BASE || 'http://localhost:5681/webhook').re
   else if (rt && fs.existsSync(rt)) admin.initializeApp({ credential: admin.credential.refreshToken(JSON.parse(fs.readFileSync(rt, 'utf8'))), projectId: PROJECT_ID });
   else admin.initializeApp({ projectId: PROJECT_ID });   // token verification only; user management disabled
 })();
-const canManageUsers = Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_FILE || process.env.FIREBASE_REFRESH_TOKEN_FILE);
+const ALLOWED_DOMAINS = (process.env.ALLOWED_EMAIL_DOMAINS || '').split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS || '').split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+const allowed = (email) => (!ALLOWED_DOMAINS.length && !ALLOWED_EMAILS.length) || ALLOWED_EMAILS.includes(email) || ALLOWED_DOMAINS.includes(email.split('@')[1] || '');
+// Bootstrap: the first admin comes from the environment; everyone else is added on the Users page by an admin.
+(async () => { const e = (process.env.INITIAL_ADMIN_EMAIL || '').trim().toLowerCase(); if (!e) return;
+  try { await pool.query(`insert into app_users (email, display_name, role, created_by) values ($1, $2, 'admin', 'env:INITIAL_ADMIN_EMAIL') on conflict (email) do update set role = 'admin', active = true`, [e, process.env.INITIAL_ADMIN_NAME || e.split('@')[0]]); console.log('initial admin:', e); } catch (err) { console.error('initial admin seed failed', err.message); } })();
 
 const app = express();
 app.set('trust proxy', 1);
@@ -34,7 +39,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const q = (text, params) => pool.query(text, params);
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: 'Server error', detail: e.message }); });
 app.get('/healthz', (_req, res) => res.send('ok'));
-app.get('/api/config', (_req, res) => res.json({ firebase: { apiKey: process.env.FIREBASE_API_KEY || '', authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${PROJECT_ID}.firebaseapp.com`, projectId: PROJECT_ID }, demoMode: DEMO_MODE, clerkLimit: CLERK_LIMIT, canManageUsers }));
+app.get('/api/config', (_req, res) => res.json({ firebase: { apiKey: process.env.FIREBASE_API_KEY || '', authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${PROJECT_ID}.firebaseapp.com`, projectId: PROJECT_ID }, demoMode: DEMO_MODE, clerkLimit: CLERK_LIMIT, allowedDomains: ALLOWED_DOMAINS, allowedEmails: ALLOWED_EMAILS.length }));
 
 // ── auth: Firebase ID token → app_users row ──
 const auth = (roles) => async (req, res, next) => { try {
@@ -43,6 +48,7 @@ const auth = (roles) => async (req, res, next) => { try {
   let decoded;
   try { decoded = await admin.auth().verifyIdToken(m[1]); } catch { return res.status(401).json({ error: 'Session expired, sign in again' }); }
   const email = (decoded.email || '').toLowerCase();
+  if (!decoded.email_verified || !allowed(email)) return res.status(403).json({ error: 'No access', detail: `${email} is not an allowed account for this screen.` });
   const u = (await q(`select email, display_name, role, active from app_users where email = $1`, [email])).rows[0];
   if (!u || !u.active) return res.status(403).json({ error: 'No access', detail: `${email} is not set up for this screen. Ask your admin.` });
   if (roles && !roles.includes(u.role)) return res.status(403).json({ error: 'Not allowed for your role' });
@@ -123,6 +129,7 @@ app.get('/api/users', authed(['admin']), wrap(async (_req, res) => res.json((awa
 app.post('/api/users', authed(['admin']), wrap(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase(), name = String(req.body.display_name || '').trim(), role = req.body.role;
   if (!/^[^@\s]+@[^@\s]+$/.test(email) || !name || !['clerk', 'lead', 'admin'].includes(role)) return res.status(400).json({ error: 'Email, name and role are required' });
+  if (!allowed(email)) return res.status(400).json({ error: `${email} is outside the allowed domains (${[...ALLOWED_DOMAINS, ...ALLOWED_EMAILS].join(', ')})` });
   // Sign-in is Google only: no account to create here. Being in app_users is what grants access.
   await q(`insert into app_users (email, display_name, role, created_by) values ($1, $2, $3, $4) on conflict (email) do update set display_name = excluded.display_name, role = excluded.role, active = true`, [email, name, role, req.user.email]);
   await q(`insert into audit_log (actor, action, note) values ($1, 'user_upserted', $2)`, [req.user.display_name, `${email} as ${role}`]);
