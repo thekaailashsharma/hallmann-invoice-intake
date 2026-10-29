@@ -9,35 +9,7 @@ Supplier invoices in, clean invoices booked in the ERP, everything else to a per
 
 ## The journey
 
-```mermaid
-flowchart LR
-  subgraph W1["① Invoice Intake"]
-    A["📥 Mailbox<br/>IMAP · Gmail"] --> B[("💾 Store email<br/>+ original PDF")]
-  end
-  subgraph W2["② Process Email"]
-    C["📄 Read PDF / XML"] --> D{"🛡️ Guardrails"}
-    D --> E["🤖 AI: type + fields"]
-    E --> F{"📏 Rules decide"}
-  end
-  subgraph W3["③ ERP Booking"]
-    G["🏦 Send to ERP"] -->|ERP down| R["⏳ Retry every 5 min"]
-    R --> G
-    G -->|answer| K["✅ Booked once"]
-  end
-  subgraph W4["④ Review Decision"]
-    H["👩‍💼 Review screen<br/>Jana · Thomas"]
-  end
-  subgraph W5["⑤ Monitoring"]
-    M["🔔 Failures + watchdog"] --> N["📧 E-mail Avanai"]
-  end
-  B --> C
-  F -->|all checks pass| G
-  F -->|unclear| H
-  F -->|not an invoice| X["🗂️ Recorded, never booked"]
-  H -->|approve| G
-  H -->|reject| Y["✖ Rejected"]
-  G -. problems .-> M
-```
+![The invoice journey across the five n8n workflows](docs/img/journey-flow.png)
 
 ## Run it
 
