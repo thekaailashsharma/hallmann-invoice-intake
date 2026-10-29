@@ -1,6 +1,6 @@
-# Invoice intake for Hallmann Maschinenbau
+# Take-home task: invoice intake for Hallmann Maschinenbau
 
-Invoices come in by email, clean ones are booked in the ERP on their own, and everything else goes to Jana and Thomas.
+I built a system where invoices come in by email, clean ones are booked in the ERP on their own, and everything else goes to Jana and Thomas.
 
 - Review screen: https://hallmann-invoices.vercel.app
 - Walkthrough: `docs/invoice-journey.pdf`
