@@ -89,7 +89,9 @@ app.get('/api/documents', authed(), wrap(async (req, res) => {
   else if (status === 'other') where.push(`d.status in ('ignored', 'duplicate')`);
   else if (status) add(`d.status = ?::doc_status`, status);
   if (types !== 'all' && status !== 'other') where.push(`d.doc_type in ('invoice', 'credit_note')`);
-  if (text) add(`(d.supplier_name ilike ? or d.invoice_number ilike ? or e.subject ilike ? or e.from_addr ilike ?)`.replace(/\?/g, () => `$${params.length + 1}`), `%${text}%`), params.splice(params.length - 1, 1, `%${text}%`);
+  // Search: supplier, number, subject, sender, attachment name, email text and the text read from attachments (also without spaces: "open paws" finds "OpenPaws").
+  if (text) { params.push(`%${String(text).trim()}%`); const p = `$${params.length}`; params.push(`%${String(text).replace(/\s+/g, '')}%`); const p2 = `$${params.length}`;
+    where.push(`(d.supplier_name ilike ${p} or d.invoice_number ilike ${p} or e.subject ilike ${p} or e.from_addr ilike ${p} or d.source ilike ${p} or d.source ilike ${p2} or e.body ilike ${p} or e.attachments::text ilike ${p} or e.attachments::text ilike ${p2})`); }
   if (from) add(`e.received_at >= ?::date`, from);
   if (to) add(`e.received_at < (?::date + interval '1 day')`, to);
   const sortCol = { received_at: 'e.received_at', gross_amount: 'd.gross_amount', supplier_name: 'd.supplier_name', status: 'd.status' }[sort] || 'e.received_at';
