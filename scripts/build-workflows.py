@@ -271,7 +271,8 @@ B.node("Send to ERP", "n8n-nodes-base.httpRequest", 4.2, {"method": "POST", "url
 B.link("Claim document", "Send to ERP")
 B.code("Read ERP answer", r"""// Map the ERP's HTTP answer to one outcome. Network errors (no answer after 3 quick tries) arrive on the error output as 'down'.
 const doc = $('Claim document').item.json; const code = Number($json.statusCode || 0); const body = $json.body || {};
-const outcome = code === 200 || code === 201 ? 'booked' : code === 409 ? 'duplicate' : [400, 404, 422].includes(code) ? 'rejected' : [0, 502, 503, 504].includes(code) || !code ? 'down' : 'error';
+// Booked only with the ERP's own booking id: some systems answer maintenance with a '200 OK' web page.
+const outcome = (code === 200 || code === 201) && body && body.id ? 'booked' : (code === 200 || code === 201) ? 'error' : code === 409 ? 'duplicate' : [400, 404, 422].includes(code) ? 'rejected' : [0, 502, 503, 504].includes(code) || !code ? 'down' : 'error';
 const msg = outcome === 'booked' ? 'Booked in ERP.' : outcome === 'down' ? `ERP not reachable (${code || ($json.error && $json.error.message) || 'no answer'}). Waiting; retried every 5 minutes.`
   : `ERP answered ${code}: ${typeof body === 'object' ? (body.error || JSON.stringify(body)) : String(body).slice(0, 200)}${body.fields ? ' (' + body.fields.join(', ') + ')' : ''}`;
 return { json: { document_id: doc.id, actor: doc.actor, outcome, erp_id: body.id || null, msg } };""", 300, 0)
