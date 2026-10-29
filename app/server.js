@@ -131,7 +131,7 @@ app.post('/api/validate', authed(), wrap(async (req, res) => {
   const ex = document_id ? await q(`select supplier_vat_id, invoice_number, gross_amount from erp_invoices where document_id <> $1::uuid`, [document_id]) : { rows: [] };
   const r = validateInvoice(fields || {}, { existing: ex.rows, today: new Date().toISOString().slice(0, 10) });
   if (r.decision === 'auto_book' && req.user.role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) r.needsLead = true;
-  r.canOverride = r.decision === 'needs_review' && r.overridable && req.user.role !== 'clerk';   // lead/admin may accept these with a note
+  r.canOverride = r.decision === 'needs_review' && r.blockers.length === 0 && req.user.role !== 'clerk';   // lead/admin may accept the remaining exceptions with a note
   res.json(r);
 }));
 

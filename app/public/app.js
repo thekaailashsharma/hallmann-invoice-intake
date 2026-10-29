@@ -158,7 +158,7 @@ async function doc(id) {
         ${FIELDS.map((k) => `<div class="field ${editable && bad.has(k) ? 'bad' : ''}"><label>${I[FI[k]]}${T('f.' + k)}</label><input name="${k}" value="${esc(dv(k, d[k]))}" ${editable ? '' : 'disabled'}></div>`).join('')}</form>
         ${items.length ? `<h2 style="margin-top:22px">${I.list}${T('line_items')}</h2><table class="items">${items.map((it) => `<tr><td>${esc(it.description)}</td><td class="dim">${esc(it.quantity || '')}</td><td class="num">${amt(it.amount, d.currency)}</td></tr>`).join('')}</table>` : ''}
         <div id="check" class="check"></div>
-        <div class="actions">${editable ? `<button class="btn primary" id="approve">${I.check}${T('approve')}</button><button class="btn" id="save">${T('save')}</button><button class="btn quiet" id="reject">${T('reject')}</button>` : ''}${canReopen ? `<button class="btn" id="reopen">${T('reopen')}</button>` : ''}</div><div id="inline"></div></div>
+        <div class="actions">${editable ? `<button class="btn primary" id="approve">${I.check}${T('approve')}</button><button class="btn" id="save">${T('save')}</button><button class="btn quiet" id="reject">${T('reject')}</button><span class="hint" id="hint"></span>` : ''}${canReopen ? `<button class="btn" id="reopen">${T('reopen')}</button>` : ''}</div><div id="inline"></div></div>
       <div class="card" style="margin-top:16px"><h2>${I.activity}${T('history')}</h2><ul class="timeline">${d.audit.map((a) => `<li class="${a.actor === 'system' ? '' : 'user'}"><time>${fmt.ts(a.ts)}</time><b>${esc(a.actor)}</b> · ${esc(tAction(a.action))}${a.note ? `<div class="note">${esc(tReason(a.note))}</div>` : ''}</li>`).join('')}</ul></div></div></div>`;
   document.getElementById('acts').innerHTML = `${d.file_name && !preview ? `<button class="btn" id="pdfOpen">${I.file}${T('show_doc')}</button>` : ''}<button class="btn" id="next">${T('next_in_queue')}${I.next}</button>`;
   const setPreview = (on) => { try { localStorage.setItem('pdfPreview', on ? 'on' : 'off'); } catch (e) {} doc(id); };
@@ -171,14 +171,40 @@ async function doc(id) {
   } else if (d.file_name) document.getElementById('pdfOpen').onclick = () => setPreview(true);
   const form = document.getElementById('f'), check = document.getElementById('check'), inline = document.getElementById('inline');
   const fieldsOf = () => Object.fromEntries([...new FormData(form)].map(([k, v]) => [k, v])); let last = null;
-  const runCheck = async () => { const r = await api('/api/validate', { method: 'POST', body: { document_id: id, fields: fieldsOf() } }); last = r; const ok = r.decision === 'auto_book'; const b = BAD(r.reasons); form.querySelectorAll('.field').forEach((f) => { const inp = f.querySelector('input'); f.classList.toggle('bad', !!inp && b.has(inp.name)); });
-    check.className = 'check ' + (ok && !r.needsLead ? 'ok' : r.needsLead ? 'warn' : ''); check.innerHTML = (ok && !r.needsLead ? I.check : I.alert) + `<div>${r.decision === 'duplicate' ? T('dup') : ok ? (r.needsLead ? T('needs_lead', { limit: CFG.clerkLimit.toLocaleString(locale()) }) : T('checks_ok')) : (r.reasons.filter((x) => !/^Email contains instructions/.test(x)).map((x) => esc(tReason(x))).join('<br>') || T('injection_hold'))}${r.warnings?.length ? `<br><small>${r.warnings.map((x) => esc(tReason(x))).join(' · ')}</small>` : ''}</div>`; const ap = document.getElementById('approve'); if (ap) { ap.disabled = !((ok && !r.needsLead) || r.canOverride); ap.dataset.override = r.canOverride && !ok ? '1' : ''; ap.lastChild.textContent = ap.dataset.override ? T('approve_exception') : T('approve'); }
-    if (r.canOverride && !ok) check.innerHTML += `<div style="margin-top:8px"><small>${T('override_hint')}</small></div>`; };
+  const runCheck = async () => {
+    const r = await api('/api/validate', { method: 'POST', body: { document_id: id, fields: fieldsOf() } }); last = r;
+    const ok = r.decision === 'auto_book' && !r.needsLead; const fx = r.fields || {};
+    form.querySelectorAll('.field').forEach((f) => { const inp = f.querySelector('input'); const k = inp && inp.name; const issue = k && fx[k];
+      f.classList.toggle('bad', !!issue && issue.level === 'fix'); f.classList.toggle('warnf', !!issue && issue.level === 'confirm');
+      let m = f.querySelector('.fmsg'); if (issue && issue.level !== 'info') { if (!m) { m = document.createElement('div'); m.className = 'fmsg'; f.appendChild(m); } m.textContent = tReason(issue.message); } else if (m) m.remove(); });
+    const blockers = r.blockers || []; const accept = (r.reasons || []).filter((x) => !blockers.includes(x));
+    const li = (xs) => xs.map((x) => `<li>${esc(tReason(x))}</li>`).join('');
+    check.className = 'check ' + (r.decision === 'duplicate' || blockers.length ? 'danger' : ok ? 'ok' : 'warn');
+    check.innerHTML = (ok ? I.check : I.alert) + `<div>${r.decision === 'duplicate' ? T('dup') : ok ? T('checks_ok') : ''}
+      ${blockers.length ? `<b>${T('must_fix')}</b><ul>${li(blockers)}</ul>` : ''}${accept.length ? `<b>${T('to_accept')}</b><ul>${li(accept)}</ul>` : ''}
+      ${r.needsLead ? T('needs_lead', { limit: CFG.clerkLimit.toLocaleString(locale()) }) : ''}${r.warnings?.length ? `<small>${r.warnings.map((x) => esc(tReason(x))).join(' · ')}</small>` : ''}</div>`;
+    const ap = document.getElementById('approve'), hint = document.getElementById('hint'); if (!ap) return;
+    const canGo = r.decision !== 'duplicate' && blockers.length === 0 && !r.needsLead && (ok || r.canOverride);
+    ap.disabled = !canGo; ap.dataset.issues = !ok && canGo ? '1' : '';
+    hint.textContent = r.decision === 'duplicate' ? T('hint_dup') : blockers.length ? T('hint_fix') : r.needsLead ? T('needs_lead', { limit: CFG.clerkLimit.toLocaleString(locale()) }) : !ok && !r.canOverride ? T('hint_lead') : !ok ? T('hint_accept') : '';
+  };
   if (!editable) check.style.display = 'none'; else { await runCheck(); form.oninput = () => runCheck(); }
   const decide = async (action, note) => { try { const r = await api(`/api/documents/${id}/decision`, { method: 'POST', body: { action, note, fields: fieldsOf() } }); toast(r.message || T('done')); doc(id); } catch (e) { toast((e.data?.reasons ? e.data.reasons.map(tReason).join(' ') : e.message), true); } };
   const ask = (label, onYes, withText, ph) => { inline.innerHTML = `<div class="inline">${withText ? `<input id="why" placeholder="${ph || T('reject_why')}">` : `<span>${label}</span>`}<button class="btn dark" id="yes">${T('confirm')}</button><button class="btn ghost" id="no">${T('cancel')}</button></div>`; document.getElementById('yes').onclick = () => { const v = withText ? document.getElementById('why').value.trim() : null; if (withText && !v) return; onYes(v); }; document.getElementById('no').onclick = () => (inline.innerHTML = ''); if (withText) document.getElementById('why').focus(); };
+  const acceptPopup = (r, onYes) => {
+    const box = document.createElement('div'); box.className = 'modal';
+    const issues = (r.reasons || []).filter((x) => !(r.blockers || []).includes(x));
+    box.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><h3>${I.alert}${T('popup_title')}</h3><p>${T('popup_sub')}</p><ul>${issues.map((x) => `<li>${esc(tReason(x))}</li>`).join('')}</ul>
+      <div class="sumrow"><span>${T('f.gross_amount')}</span><b>${fmt.money(r.normalized?.gross_amount, r.normalized?.currency)}</b></div>
+      <textarea id="pnote" rows="3" placeholder="${T('override_note')}"></textarea><div class="err" id="perr"></div>
+      <div class="row"><button class="btn ghost" id="pno">${T('cancel')}</button><button class="btn primary" id="pyes">${I.check}${T('approve_exception')}</button></div></div>`;
+    document.body.appendChild(box); const close = () => box.remove(); box.querySelector('#pnote').focus();
+    box.onclick = (e) => { if (e.target === box) close(); }; box.querySelector('#pno').onclick = close;
+    box.querySelector('#pyes').onclick = () => { const v = box.querySelector('#pnote').value.trim(); if (v.length < 5) { box.querySelector('#perr').textContent = T('popup_need_note'); return; } close(); onYes(v); };
+    document.addEventListener('keydown', function esc_(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc_); } });
+  };
   const on = (idd, fn) => { const el = document.getElementById(idd); if (el) el.onclick = fn; };
-  on('approve', () => { if (document.getElementById('approve').dataset.override) return ask(null, (v) => decide('approve', v), true, T('override_note')); const g = last?.normalized?.gross_amount; if (Math.abs(Number(g || 0)) >= 2000) ask(T('confirm_approve', { amount: fmt.money(g, last?.normalized?.currency) }), () => decide('approve')); else decide('approve'); });
+  on('approve', () => { if (document.getElementById('approve').dataset.issues) return acceptPopup(last, (note) => decide('approve', note)); const g = last?.normalized?.gross_amount; if (Math.abs(Number(g || 0)) >= 2000) ask(T('confirm_approve', { amount: fmt.money(g, last?.normalized?.currency) }), () => decide('approve')); else decide('approve'); });
   on('save', () => decide('save')); on('reject', () => ask(null, (v) => decide('reject', v), true)); on('reopen', () => decide('reopen'));
   on('next', async () => { const n = await api(`/api/documents/${id}/next`); location.hash = n.id ? '#doc/' + n.id : '#invoices'; });
   document.onkeydown = (e) => { if (e.key === 'Escape') location.hash = '#invoices'; };

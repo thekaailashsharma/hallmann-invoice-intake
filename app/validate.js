@@ -12,8 +12,17 @@ const AUTO_BOOK_LIMIT = 10000;   // EUR gross. Above this nothing books unattend
 const MAX_AGE_DAYS = 365;        // older invoices go to a person (closed periods, stale claims)
 const VAT_PREFIX_ALIAS = { EL: 'GR' };   // Greece uses EL in VAT IDs
 const BANK_CHANGE = /(neue|geänderte|aktualisierte)\s+bankverbindung|new bank (details|account)|changed? (our )?bank|bank details have changed|kontoverbindung hat sich geändert/i;
-// Reasons a lead/admin may consciously accept with a note. Everything else must be fixed in the fields.
-const OVERRIDABLE = [/^Currency \w+: non-EUR/, /^Non-EU supplier/, /^Unknown supplier/, /^Gross amount above/, /^Invoice is older than/, /^0% VAT without/, /^Possible corrected re-send/];
+// Blockers can never be approved: an important field is empty, or the numbers contradict each other (the net/gross mix-up).
+// Every other reason can be accepted by a person with a written note (role rules apply).
+const BLOCKERS = [/^Supplier name missing/, /number missing/, /^Invoice date missing/, /^Net or gross amount missing/, /^VAT amount missing/, /^Currency missing/,
+  /^Amounts do not add up/, /^VAT \S+ does not match/, /^Negative amounts/, /^Positive amounts/, /^Gross amount is zero/, /^Due date is before/];
+// Which form field each reason is about, so the screen can outline exactly those fields.
+const REASON_FIELDS = [[/^Supplier name missing|Hallmann itself/, ['supplier_name']], [/number missing|^Invoice number \S+ does not appear|corrected re-send/, ['invoice_number']],
+  [/^Invoice date|in the future|older than/, ['invoice_date']], [/^Due date/, ['due_date']], [/^Net or gross amount missing|^Negative amounts|^Positive amounts/, ['net_amount', 'gross_amount']],
+  [/^VAT amount missing/, ['vat_amount']], [/^Currency/, ['currency']], [/VAT ID|^Unknown supplier/, ['supplier_vat_id']], [/^Amounts do not add up/, ['net_amount', 'vat_amount', 'gross_amount']],
+  [/^VAT \S+ does not match|^VAT rate|charged \S+% VAT|^0% VAT without/, ['vat_rate', 'vat_amount']], [/^Net amount/, ['net_amount']], [/^Gross amount/, ['gross_amount']], [/^VAT amount \S+ does not appear/, ['vat_amount']],
+  [/^Only a total is shown/, ['net_amount', 'vat_amount']], [/PO number/, ['po_number']], [/^Credit note does not reference/, ['related_invoice']]];
+const OVERRIDABLE = [/^Only a total is shown/, /^Currency \w+: non-EUR/, /^Non-EU supplier/, /^Unknown supplier/, /^Gross amount above/, /^Invoice is older than/, /^0% VAT without/, /^Possible corrected re-send/];
 const INJECTION_PATTERNS = [
   /ignoriere? (alle )?(vorherigen|bisherigen|obigen) (anweisungen|anordnungen)/i, /systemhinweis|hinweis für (die )?automatische/i, /automatische[nr]? verarbeitung/i,
   /als bezahlt (markieren|kennzeichnen)/i, /(betrag|summe|status) auf .{0,20} setzen/i, /nicht (zur|in die) (prüfung|freigabe)/i,
@@ -38,14 +47,14 @@ function parseAmount(v) {
 /** Accepts ISO, DD.MM.YYYY, DD/MM/YYYY, "30 September 2026", "October 8, 2026" → YYYY-MM-DD (or null). */
 function parseDate(v) {
   if (!v) return null;
-  const s = String(v).trim();
+  const s = String(v).trim().replace(/(\d{1,2})(st|nd|rd|th)\b/gi, '$1').replace(/^(mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+/i, '').replace(/\s+/g, ' ');   // "7th August 2026", "Friday, 7 August"
   let m;
   if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return `${m[1]}-${m[2]}-${m[3]}`;
   if ((m = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4}|\d{2})$/))) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; if (+m[2] > 12 || +m[1] > 31) return null; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
   const MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12, januar: 1, februar: 2, märz: 3, mai: 5, juni: 6, juli: 7, oktober: 10, dezember: 12,
     jan: 1, feb: 2, mar: 3, apr: 4, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, okt: 10, nov: 11, dec: 12, dez: 12 };
-  if ((m = s.match(/^(\d{1,2})\.?\s+([A-Za-zäöü]+)\s+(\d{4})$/)) && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  if ((m = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/)) && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[1].toLowerCase()]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  if ((m = s.match(/^(\d{1,2})\.?\s+([A-Za-zäöü]+)\.?,?\s+(\d{4})$/)) && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  if ((m = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/)) && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[1].toLowerCase()]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;
   return null;   // never guess (new Date() would read 10/03 as US and shift by timezone)
 }
 /** Invoice numbers compared as letters+digits only, leading zeros dropped: "RE 2026-0931" == "RE-2026-0931" == "Nr. RE20260931". */
@@ -58,7 +67,14 @@ function amountsInText(text) {
   for (const tok of String(text || '').match(re) || []) { const n = parseAmount(tok.replace(/[\s']/g, '')); if (n !== null) out.add(round2(Math.abs(n))); }
   return out;
 }
-function isOverridable(reason) { return OVERRIDABLE.some((re) => re.test(reason)); }
+function isOverridable(reason) { return !BLOCKERS.some((re) => re.test(reason)); }
+function fieldIssues(reasons, warnings) {
+  const f = {};
+  const add = (r, level) => { for (const [re, keys] of REASON_FIELDS) if (re.test(r)) for (const k of keys) if (!f[k] || (level === 'fix' && f[k].level !== 'fix')) f[k] = { level, message: r }; };
+  for (const r of reasons) add(r, isOverridable(r) ? 'confirm' : 'fix');
+  for (const w of warnings || []) add(w, 'info');
+  return f;
+}
 function round2(n) { return Math.round(n * 100) / 100; }
 function detectInjection(text) {
   const hits = INJECTION_PATTERNS.filter((re) => re.test(text || '')).map((re) => re.source);
@@ -95,6 +111,8 @@ function validateInvoice(x, ctx = {}) {
     iban: normIban(x.iban),
   };
   n.supplier_country = countryFromVatId(n.supplier_vat_id) || (x.supplier_country || '').toUpperCase() || null;
+  // US suppliers write MM/DD/YYYY: re-read numeric dates in that order when the invoice is clearly American.
+  if (n.supplier_country === 'US' || n.currency === 'USD') for (const k of ['invoice_date', 'due_date']) { const m = String(x[k] || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m && +m[1] <= 12) n[k] = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }
 
   const text = ctx.emailText || '';
   const injection = detectInjection(text);
@@ -105,12 +123,22 @@ function validateInvoice(x, ctx = {}) {
   if (!n.supplier_name) reasons.push('Supplier name missing.');
   if (!n.invoice_number) reasons.push(docType === 'credit_note' ? 'Credit note number missing.' : 'Invoice number missing.');
   if (!n.invoice_date) reasons.push('Invoice date missing or unreadable.');
+  // Only a total, no net/VAT breakdown (e.g. foreign contractors): one clear reason, pre-filled net = total and VAT = 0 for a person to confirm.
+  const vatWords = /(mwst|ust\b|umsatzsteuer|vat|tva|iva|sales tax|\btax\b|steuer)/i;
+  const totalOnly = n.gross_amount !== null && ((n.net_amount === null && n.vat_amount === null)
+    || (ctx.emailText && !vatWords.test(ctx.emailText) && !n.vat_amount && (n.net_amount === null || n.net_amount === n.gross_amount)));
+  if (totalOnly) {
+    if (n.vat_rate) { n.net_amount = round2(n.gross_amount / (1 + n.vat_rate / 100)); n.vat_amount = round2(n.gross_amount - n.net_amount); }   // "119,00 inkl. 19 % MwSt."
+    else { n.net_amount = n.gross_amount; n.vat_amount = 0; n.vat_rate = 0; }
+    reasons.push(`Only a total is shown, no net/VAT breakdown. Confirm net and VAT${n.vat_rate ? ` (pre-filled from the stated ${n.vat_rate} %)` : ''}.`);
+  }
   if (n.net_amount === null || n.gross_amount === null) reasons.push('Net or gross amount missing.');
   if (n.vat_amount === null) { if (n.net_amount !== null && n.gross_amount !== null) n.vat_amount = round2(n.gross_amount - n.net_amount); else reasons.push('VAT amount missing.'); }
   if (!n.currency) reasons.push('Currency missing.');
 
   // ── supplier identity ──
-  if (!n.supplier_vat_id) reasons.push('Supplier VAT ID missing (needed to identify the supplier and detect duplicates).');
+  const outsideEU = (n.supplier_country && !EU.has(n.supplier_country)) || (!n.supplier_country && n.currency && n.currency !== 'EUR');
+  if (!n.supplier_vat_id) { if (outsideEU) warnings.push('No VAT ID (supplier outside the EU).'); else reasons.push('Supplier VAT ID missing (needed to identify the supplier and detect duplicates).'); }
   else if (n.supplier_vat_id === OWN_VAT_ID) reasons.push('Supplier VAT ID is our own VAT ID.');
   else if (VAT_ID_RE[n.supplier_country] && !VAT_ID_RE[n.supplier_country].test(n.supplier_vat_id.replace(/^EL/, 'GR'))) reasons.push(`Supplier VAT ID ${n.supplier_vat_id} has an invalid format for ${n.supplier_country}.`);
   if (/hallmann/i.test(n.supplier_name || '')) reasons.push('Issuer looks like Hallmann itself (outgoing invoice?).');
@@ -132,7 +160,7 @@ function validateInvoice(x, ctx = {}) {
     const nums = amountsInText(text); const T = alnum(text);
     for (const [k, label] of [['net_amount', 'Net'], ['gross_amount', 'Gross'], ['vat_amount', 'VAT']]) {
       const v = n[k]; if (v === null || v === 0) continue;
-      if (k === 'vat_amount' && (x.vat_amount === '' || x.vat_amount == null)) continue;   // derived, not extracted
+      if ((k === 'vat_amount' && (x.vat_amount === '' || x.vat_amount == null)) || (totalOnly && k !== 'gross_amount')) continue;   // derived, not extracted
       if (!nums.has(round2(Math.abs(v)))) reasons.push(`${label} amount ${v} does not appear in the email text.`);
     }
     if (n.invoice_number && !T.includes(alnum(n.invoice_number))) reasons.push(`Invoice number ${n.invoice_number} does not appear in the email text.`);
@@ -147,7 +175,7 @@ function validateInvoice(x, ctx = {}) {
     if (docType === 'credit_note' && (n.net_amount > 0 || n.gross_amount > 0)) reasons.push('Positive amounts on a credit note.');
     if (n.gross_amount === 0) reasons.push('Gross amount is zero.');
     if (ctx.mode === 'intake' && Math.abs(n.gross_amount) > AUTO_BOOK_LIMIT) reasons.push(`Gross amount above ${AUTO_BOOK_LIMIT.toLocaleString('en')} EUR: not booked without a person (policy).`);
-    if (n.vat_rate !== null && n.net_amount !== 0) {
+    if (n.vat_rate !== null && n.net_amount !== 0 && !totalOnly) {
       const expectedVat = round2(n.net_amount * n.vat_rate / 100);
       if (Math.abs(expectedVat - n.vat_amount) > 0.02) reasons.push(`VAT ${n.vat_amount} does not match ${n.vat_rate}% of net ${n.net_amount} (expected ${expectedVat}).`);
     } else if (n.vat_rate === null && n.net_amount) {
@@ -158,7 +186,7 @@ function validateInvoice(x, ctx = {}) {
       if (allowed && !allowed.includes(n.vat_rate)) reasons.push(`VAT rate ${n.vat_rate}% is not a valid rate for ${c}.`);
       if (c && c !== 'DE' && EU.has(c) && n.vat_rate !== 0) reasons.push(`EU supplier (${c}) charged ${n.vat_rate}% VAT; expected reverse charge at 0%.`);
       if (c && c !== 'DE' && !EU.has(c) && n.vat_rate !== 0) reasons.push(`Non-EU supplier (${c}) charged ${n.vat_rate}% VAT; needs a tax check.`);
-      if (n.vat_rate === 0 && n.net_amount !== 0 && !n.reverse_charge && !(c && c !== 'DE' && EU.has(c))) reasons.push('0% VAT without a reverse-charge or exemption note on the invoice.');
+      if (!totalOnly && n.vat_rate === 0 && n.net_amount !== 0 && !n.reverse_charge && !(c && c !== 'DE' && EU.has(c))) reasons.push('0% VAT without a reverse-charge or exemption note on the invoice.');
     }
   }
   if (n.currency && n.currency !== 'EUR') reasons.push(`Currency ${n.currency}: non-EUR invoices are booked manually (exchange rate, tax).`);
@@ -193,7 +221,8 @@ function validateInvoice(x, ctx = {}) {
   let decision = 'auto_book';
   if (isDuplicate) decision = 'duplicate';
   else if (reasons.length) decision = 'needs_review';
-  return { normalized: n, reasons, warnings, decision, injection, duplicateKey: key, overridable: reasons.length > 0 && reasons.every(isOverridable) };
+  return { normalized: n, reasons, warnings, decision, injection, duplicateKey: key, overridable: reasons.length > 0 && reasons.every(isOverridable),
+    blockers: reasons.filter((r) => !isOverridable(r)), fields: fieldIssues(reasons, warnings) };
 }
 
-if (typeof module !== 'undefined') module.exports = { validateInvoice, parseAmount, parseDate, detectInjection, normalizeVatId, countryFromVatId, normInvoiceNo, amountsInText, isOverridable, OWN_VAT_ID, AUTO_BOOK_LIMIT };
+if (typeof module !== 'undefined') module.exports = { fieldIssues, validateInvoice, parseAmount, parseDate, detectInjection, normalizeVatId, countryFromVatId, normInvoiceNo, amountsInText, isOverridable, OWN_VAT_ID, AUTO_BOOK_LIMIT };

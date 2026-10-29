@@ -92,13 +92,14 @@ Sample outcomes:
 
 ## 3. What I would add before this runs for a real client
 
-1. **Real mailbox + PDFs.** IMAP/Graph trigger, PDF text extraction with OCR fallback, attachment stored next to the email. Today the invoice is in the body.
-2. **SSO** instead of email/password (Hallmann's IdP via Firebase/OIDC), a four-eyes rule above a second threshold, the audit log made append-only (no UPDATE/DELETE grants), and a service-account credential for the Admin SDK instead of the CLI token used in the trial.
-3. **Real ERP adapter** behind the same `ERP Booking` sub-workflow: supplier master-data match (VAT ID → vendor number), PO three-way match, SAP/Dynamics API with idempotency keys, circuit breaker instead of the availability flag.
-4. **Supplier VAT-ID validation** against VIES, and a configurable rule table (VAT rates per country, approval thresholds) instead of constants in code.
-5. **Operations:** n8n on Postgres with queue mode and two workers, execution pruning and timeouts set per workflow, alerts to a real channel (email/Teams) with a daily digest to Sabine, dashboards for volume, auto-book rate and review time.
-6. **Model governance:** an evaluation dataset built from the review queue (every correction Jana makes becomes a test case), a stronger extraction model behind the same node (any OpenAI-compatible provider works; GPT/Claude would be my production pick), and a second, independent extraction for amounts above a threshold.
-7. **Data protection:** DPA with the LLM provider, PII minimisation in prompts, EU hosting, retention policy for emails and executions.
+1. **Connect Hallmann's real ERP.** Today "Send to ERP" talks to a mock ERP that behaves like a real booking API (API key, idempotency on our document id, 409 on duplicates, 503 in maintenance). Going live is one adapter in that node. Questions for Hallmann: which ERP and version (SAP S/4HANA, Business Central, proALPHA, abas, DATEV?), is there a posting API and a test system, where do expense account / cost centre / tax code come from (PO three-way match, supplier default, or a person), and what does the ERP answer during maintenance (503 or a "200 OK" maintenance page; we only count a booking when the ERP returns its own booking id).
+2. **Supplier master from the ERP**, refreshed nightly (VAT ID, IBAN, sender domains, vendor number), instead of the trial seed table.
+3. **Dedicated invoice mailbox** set up by Hallmann IT (see "Mailbox access"), Gmail scope `gmail.modify` or a Workspace service account, or an M365 app credential.
+4. **EU-hosted model under a data processing agreement.** The trial uses Sarvam-105B (hosted in India, chosen only because a key was at hand). Production: Mistral (EU), Azure OpenAI in an EU region or Claude via AWS Bedrock Frankfurt. Every AI node uses one OpenAI-compatible credential, so this is a credential change plus a re-run of the test suites.
+5. **Scanned invoices (no text layer)** currently go to a person with the PDF shown next to the fields. Add OCR once the volume of scans is known; the rules catch OCR mistakes on amounts the same way they catch AI mistakes.
+6. **Invoices with several VAT rates** (7 % + 19 %) always go to a person; add a VAT breakdown to the extraction. Capture Skonto terms so early-payment discounts are not lost.
+7. **Retention:** invoices and their originals 10 years (GoBD), ideally in Hallmann's archive; mails with nothing to book are already reduced to metadata after processing; n8n execution logs 30 days.
+8. **Operations:** n8n with queue mode and two workers, alerts to Avanai's real channel (email works today; Teams/Slack/PagerDuty are drop-in), a daily digest to Sabine, and an evaluation set built from every correction Jana and Thomas make.
 
 ## 4. What I didn't finish
 

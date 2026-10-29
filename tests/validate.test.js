@@ -68,7 +68,7 @@ test('EU reverse-charge invoice at 0% VAT is fine; prompt injection in the email
 test('USD invoice without VAT id → review with clear reasons', () => {
   const r = validateInvoice({ doc_type: 'invoice', supplier_name: 'Pinewood Software Inc.', supplier_vat_id: '', invoice_number: 'INV-55821', invoice_date: 'October 8, 2026', due_date: 'November 7, 2026', currency: 'USD', net_amount: '2,400.00', vat_rate: 0, vat_amount: '0.00', gross_amount: '2,400.00' }, {});
   assert.equal(r.decision, 'needs_review');
-  assert.match(r.reasons.join(' '), /VAT ID missing/); assert.match(r.reasons.join(' '), /Currency USD/);
+  assert.match(r.warnings.join(' '), /No VAT ID \(supplier outside the EU\)/); assert.match(r.reasons.join(' '), /Currency USD/);
 });
 
 test('credit note with negative amounts auto-books; positive amounts on a credit note → review', () => {
@@ -148,4 +148,31 @@ test('overridable reasons: a lead may accept non-EUR or unknown supplier, never 
   assert.ok(!isOverridable('Amounts do not add up: net 1 + VAT 2 ≠ gross 4.'));
   assert.equal(validateInvoice({ ...good, currency: 'USD' }, {}).overridable, true);
   assert.equal(validateInvoice({ ...good, currency: 'USD', gross_amount: '9' }, {}).overridable, false);
+});
+
+test('ordinal and weekday dates; total-only invoices get one clear reason and a pre-fill', () => {
+  assert.equal(parseDate('7th August 2026'), '2026-08-07');
+  assert.equal(parseDate('August 7th, 2026'), '2026-08-07');
+  assert.equal(parseDate('Friday, 7 August 2026'), '2026-08-07');
+  assert.equal(parseDate('7. Aug. 2026'), '2026-08-07');
+  const r = validateInvoice({ ...good, net_amount: '', vat_amount: '', vat_rate: '', gross_amount: '$1296', currency: 'USD', supplier_vat_id: '' }, {});
+  assert.equal(r.normalized.net_amount, 1296); assert.equal(r.normalized.vat_amount, 0);
+  const why = r.reasons.join(' | ');
+  assert.match(why, /Only a total is shown/); assert.doesNotMatch(why, /Net or gross amount missing|VAT amount missing|0% VAT without/);
+});
+
+test('total-only with a stated VAT rate is split; US dates read month first', () => {
+  const r = validateInvoice({ ...good, net_amount: '', vat_amount: '', vat_rate: '19', gross_amount: '119,00' }, {});
+  assert.equal(r.normalized.net_amount, 100); assert.equal(r.normalized.vat_amount, 19);
+  assert.doesNotMatch(r.reasons.join(' '), /does not match/);
+  const u = validateInvoice({ ...good, supplier_vat_id: '', supplier_country: 'US', currency: 'USD', invoice_date: '11/07/2026', due_date: '12/07/2026' }, {});
+  assert.equal(u.normalized.invoice_date, '2026-11-07');
+});
+
+test('blockers vs. acceptable exceptions, and which fields to outline', () => {
+  const r = validateInvoice({ ...good, net_amount: '980', vat_amount: '287', gross_amount: '1296', currency: 'USD' }, {});
+  assert.ok(r.blockers.some((b) => /do not add up/.test(b)));
+  assert.equal(r.fields.gross_amount.level, 'fix'); assert.equal(r.fields.currency.level, 'confirm');
+  const ok = validateInvoice({ ...good, currency: 'USD', supplier_vat_id: '' , supplier_country: 'US', vat_rate: 0, vat_amount: '0', gross_amount: '1250.00' }, {});
+  assert.equal(ok.blockers.length, 0); assert.equal(ok.overridable, true);
 });
