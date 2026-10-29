@@ -1,15 +1,110 @@
 {
-  "_comment": "Expected outcome per sample email. status = documents.status after processing; checks are substrings expected in reasons/warnings or fields.",
-  "msg-001": {"status": "booked",       "doc_type": "invoice",     "gross": 1487.50,  "why": "clean German supplier invoice, EUR, 19%, PO present"},
-  "msg-002": {"status": "duplicate",    "doc_type": "invoice",     "why": "same invoice 2026-10418 resent by Nordwerk"},
-  "msg-003": {"status": "needs_review", "doc_type": "invoice",     "gross": 1722.00,  "reason": "Non-EU supplier (GB)", "why": "UK supplier charged 20% VAT on EUR invoice; tax check"},
-  "msg-004": {"status": "needs_review", "doc_type": "invoice",     "gross": 761.60,   "reason": "Invoice number missing", "why": "German invoice without invoice number"},
-  "msg-005": {"status": "ignored",      "doc_type": "other",       "why": "meeting request"},
-  "msg-006": {"status": "needs_review", "doc_type": "invoice",     "gross": 3400.00,  "reason": "manipulation", "why": "prompt injection; reverse charge otherwise fine; amount must stay 3400"},
-  "msg-007": {"status": "booked",       "doc_type": "invoice",     "gross": 1469.13,  "why": "German number format 1.234,56"},
-  "msg-008": {"status": "booked",       "doc_type": "credit_note", "gross": -178.50,  "why": "credit note, negative amounts, references 2026-10418"},
-  "msg-009": {"status": "needs_review", "doc_type": "invoice",     "gross": 2400.00,  "reason": "Currency USD", "why": "USD, no VAT id"},
-  "msg-010": {"status": "ignored",      "doc_type": "reminder",    "related": "2026-10418", "why": "payment reminder"},
-  "msg-011": {"status": "needs_review", "doc_type": "invoice",     "gross": 1176.00,  "reason": "Non-EU supplier (GB)", "why": "UK supplier again with 20% VAT"},
-  "msg-012": {"status": "booked",       "doc_type": "invoice",     "gross": 2499.00,  "invoice_number": "AFS-2026-2207", "why": "forwarded internally; newest invoice extracted, quoted September invoice ignored"}
+ "_comment": "Expected outcome per sample email. status = documents.status after processing; checks are substrings expected in reasons/warnings or fields.",
+ "msg-001": {
+  "status": "booked",
+  "doc_type": "invoice",
+  "gross": 1487.5,
+  "why": "clean German supplier invoice, EUR, 19%, PO present"
+ },
+ "msg-002": {
+  "status": "duplicate",
+  "doc_type": "invoice",
+  "why": "same invoice 2026-10418 resent by Nordwerk"
+ },
+ "msg-003": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 1722.0,
+  "reason": "Non-EU supplier (GB)",
+  "why": "UK supplier charged 20% VAT on EUR invoice; tax check"
+ },
+ "msg-004": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 761.6,
+  "reason": "Invoice number missing",
+  "why": "German invoice without invoice number"
+ },
+ "msg-005": {
+  "status": "ignored",
+  "doc_type": "other",
+  "why": "meeting request"
+ },
+ "msg-006": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 3400.0,
+  "reason": "manipulation",
+  "why": "prompt injection; reverse charge otherwise fine; amount must stay 3400"
+ },
+ "msg-007": {
+  "status": "booked",
+  "doc_type": "invoice",
+  "gross": 1469.13,
+  "why": "German number format 1.234,56"
+ },
+ "msg-008": {
+  "status": "booked",
+  "doc_type": "credit_note",
+  "gross": -178.5,
+  "why": "credit note, negative amounts, references 2026-10418"
+ },
+ "msg-009": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 2400.0,
+  "reason": "Currency USD",
+  "why": "USD, no VAT id"
+ },
+ "msg-010": {
+  "status": "ignored",
+  "doc_type": "reminder",
+  "related": "2026-10418",
+  "why": "payment reminder"
+ },
+ "msg-011": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 1176.0,
+  "reason": "Non-EU supplier (GB)",
+  "why": "UK supplier again with 20% VAT"
+ },
+ "msg-012": {
+  "status": "booked",
+  "doc_type": "invoice",
+  "gross": 2499.0,
+  "invoice_number": "AFS-2026-2207",
+  "why": "forwarded internally; newest invoice extracted, quoted September invoice ignored"
+ },
+ "msg-013": {
+  "status": "booked",
+  "doc_type": "invoice",
+  "gross": 2380.0,
+  "why": "invoice only in a PDF attachment"
+ },
+ "msg-014": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 595.0,
+  "reason": "bank details",
+  "why": "supplier announces a new IBAN (payment-fraud pattern)"
+ },
+ "msg-015": {
+  "status": "ignored",
+  "doc_type": "other",
+  "reason": "Automatic reply",
+  "why": "out-of-office auto-reply, never sent to the AI"
+ },
+ "msg-016": {
+  "status": "needs_review",
+  "doc_type": "invoice",
+  "gross": 119.0,
+  "reason": "not a known domain",
+  "why": "real supplier VAT ID from a look-alike sender domain"
+ },
+ "msg-017": {
+  "status": "duplicate",
+  "doc_type": "invoice",
+  "why": "same invoice as msg-007, number written as 'RE 2026 0931'"
+ }
 }

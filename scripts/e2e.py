@@ -3,16 +3,31 @@
 import os, pathlib as _pl
 for _l in (_pl.Path(__file__).resolve().parent.parent / ".env").read_text().splitlines() if (_pl.Path(__file__).resolve().parent.parent / ".env").exists() else []:
     if "=" in _l and not _l.startswith("#"): os.environ.setdefault(_l.split("=", 1)[0].strip(), _l.split("=", 1)[1].strip())
-import json, pathlib, subprocess, sys
+import imaplib, json, pathlib, subprocess, sys, time
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 def psql(sql): return subprocess.run(["docker", "exec", "intake-postgres", "psql", "-U", "intake", "-d", "intake", "-At", "-c", sql], capture_output=True, text=True).stdout.strip()
 if "--keep" not in sys.argv:
-    psql("truncate audit_log, alerts, erp_invoices, documents, inbound_emails restart identity cascade; update erp_status set available = true, note = 'ERP online';")
+    psql("set session_replication_role = replica; truncate audit_log, alerts, erp_invoices, documents, inbound_emails restart identity cascade; update erp_status set available = true, note = 'ERP online';")
     print("reset data")
-subprocess.run([sys.executable, str(ROOT / "scripts" / "replay.py")], check=False)
+    for user in ("rechnungen@hallmann.example", "oncall@avanai.example"):   # empty the mailboxes
+        try:
+            m = imaplib.IMAP4("localhost", 3143); m.login(user, os.environ.get("MAILBOX_PASSWORD", "mailbox") if user.startswith("rechnungen") else user); m.select("INBOX")
+            typ, ids = m.search(None, "ALL")
+            for i in ids[0].split(): m.store(i, "+FLAGS", "\\Deleted")
+            m.expunge(); m.logout()
+        except Exception: pass
 expected = {k: v for k, v in json.loads((ROOT / "fixtures" / "expected.json").read_text()).items() if not k.startswith("_")}
-rows = psql("select json_agg(row_to_json(t)) from (select message_id, status::text, doc_type::text, gross_amount, invoice_number, related_invoice, reasons, warnings, injection_flag from documents order by created_at) t")
-docs = {d["message_id"]: d for d in (json.loads(rows) if rows and rows != "" else [])}
+# Deliver like a supplier would (SMTP → mailbox); n8n's IMAP trigger picks them up.
+subprocess.run([sys.executable, str(ROOT / "scripts" / "send-emails.py")], check=True)
+t0 = time.time(); docs = {}
+while time.time() - t0 < 900:
+    rows = psql("select json_agg(row_to_json(t)) from (select split_part(message_id, '@', 1) as message_id, status::text, doc_type::text, gross_amount, invoice_number, related_invoice, reasons, warnings, injection_flag from documents order by created_at) t")
+    docs = {d["message_id"]: d for d in (json.loads(rows) if rows else [])}
+    settled = all(k in docs and docs[k]["status"] != "pending_erp" for k in expected)
+    print(f"\r  waiting… {len(docs)}/{len(expected)} documents  ({time.time() - t0:.0f}s)", end="", flush=True)
+    if settled: break
+    time.sleep(5)
+print()
 fails = 0
 for mid, exp in expected.items():
     d = docs.get(mid)

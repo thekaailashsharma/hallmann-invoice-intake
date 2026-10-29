@@ -50,6 +50,21 @@ open http://localhost:5681      # bundled n8n (or point at your own: see .env.ex
 
 **Where AI coding tools were used:** the whole package was built with Claude Code (Fable 5.1) as a pair: schema, workflows, validator, screen, tests, this README. Design decisions and the test expectations were reviewed by hand; the e2e checks are what we trust.
 
+## Mailbox access (what n8n can and cannot read)
+
+Gmail and IMAP permissions always cover a whole mailbox; they cannot be limited to a label or folder. So the filter that matters is the mailbox itself, and filtering happens on two levels.
+
+**Level 1, set up by Hallmann IT (the real access control)**
+- A dedicated invoice mailbox (for example rechnungen@hallmann.de) that receives nothing else. Colleagues forward invoices there; nobody's personal inbox is connected.
+- Gmail: the n8n credential uses Custom Scopes = `https://www.googleapis.com/auth/gmail.modify` instead of n8n's default (which includes full mail access). `gmail.modify` is the narrowest scope that can add the "Processed" label; it can technically send or trash mail, so the workflow contains no send or delete node, and the admin can audit and revoke the access in the Google Admin console. Production: a Workspace service account, approved by the admin for this scope on this one mailbox only.
+- IMAP / Microsoft 365: an app-specific credential for the same dedicated mailbox.
+
+**Level 2, in n8n (what the workflow processes)**
+- Gmail query `in:inbox -label:Processed`, no spam or trash. The label is set as soon as the email is safely stored in Postgres; the Monitoring workflow finishes anything that fails afterwards.
+- Every email is processed once per Message-ID (Postgres), independent of the label.
+- Only PDF and XML attachments are read; IBANs are masked before the AI sees the text.
+- Execution logs keep full data for 30 days (`EXECUTIONS_DATA_MAX_AGE=720`) for support; the system of record is Hallmann's Postgres.
+
 ## 2. How I know it works
 
 - `tests/validate.test.js`: 14 unit tests for the validator, including the net/gross swap, German formats, reverse charge, currencies, duplicates, injection.

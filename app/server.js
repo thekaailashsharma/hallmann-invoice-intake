@@ -14,6 +14,7 @@ const DEMO_MODE = process.env.DEMO_MODE === 'true';
 const CLERK_LIMIT = Number(process.env.CLERK_APPROVAL_LIMIT || 10000);
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const N8N = (process.env.N8N_WEBHOOK_BASE || 'http://localhost:5681/webhook').replace(/\/$/, '');
+const N8N_KEY = process.env.N8N_WEBHOOK_KEY || '';   // shared secret: n8n refuses review decisions without it
 
 // Admin SDK: service account in production; the Firebase CLI refresh token is accepted for the trial.
 (function initAdmin() {
@@ -38,7 +39,7 @@ app.use(rateLimit({ windowMs: 60_000, limit: 300 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const q = (text, params) => pool.query(text, params);
-const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: 'Server error', detail: e.message }); });
+const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: 'Server error' }); });
 app.get('/healthz', (_req, res) => res.send('ok'));
 app.get('/api/config', (_req, res) => res.json({ firebase: { apiKey: process.env.FIREBASE_API_KEY || '', authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${PROJECT_ID}.firebaseapp.com`, projectId: PROJECT_ID }, demoMode: DEMO_MODE, clerkLimit: CLERK_LIMIT, allowedDomains: ALLOWED_DOMAINS, allowedEmails: ALLOWED_EMAILS.length }));
 
@@ -116,9 +117,10 @@ app.get('/api/documents/:id', authed(), wrap(async (req, res) => {
 
 app.post('/api/validate', authed(), wrap(async (req, res) => {
   const { document_id, fields } = req.body;
-  const dupes = document_id ? await q(`select supplier_vat_id || '|' || invoice_number as k from erp_invoices where document_id <> $1::uuid`, [document_id]) : { rows: [] };
-  const r = validateInvoice(fields, { existingInvoiceNumbers: new Set(dupes.rows.map((x) => x.k)), today: new Date().toISOString().slice(0, 10) });
+  const ex = document_id ? await q(`select supplier_vat_id, invoice_number, gross_amount from erp_invoices where document_id <> $1::uuid`, [document_id]) : { rows: [] };
+  const r = validateInvoice(fields || {}, { existing: ex.rows, today: new Date().toISOString().slice(0, 10) });
   if (r.decision === 'auto_book' && req.user.role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) r.needsLead = true;
+  r.canOverride = r.decision === 'needs_review' && r.overridable && req.user.role !== 'clerk';   // lead/admin may accept these with a note
   res.json(r);
 }));
 
@@ -126,7 +128,9 @@ app.post('/api/validate', authed(), wrap(async (req, res) => {
 app.post('/api/documents/:id/decision', authed(), wrap(async (req, res) => {
   const { action, fields, note } = req.body;
   const body = { document_id: req.params.id, action, fields, note, actor: req.user.display_name, actor_email: req.user.email, role: req.user.role };
-  const r = await fetch(`${N8N}/review-decision`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  let r;
+  try { r = await fetch(`${N8N}/review-decision`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-intake-key': N8N_KEY }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) }); }
+  catch { return res.status(503).json({ ok: false, reasons: ['The booking service is not reachable right now. Nothing was changed. Try again in a minute.'] }); }
   const text = await r.text();
   res.status(r.status).type('application/json').send(text || '{}');
 }));
@@ -157,11 +161,6 @@ app.patch('/api/users/:email', authed(['admin']), wrap(async (req, res) => {
 
 // ── demo-only controls (never shipped to the client build) ──
 if (DEMO_MODE) {
-  app.post('/api/demo/erp-status', authed(['admin', 'lead']), wrap(async (req, res) => {
-    const available = Boolean(req.body.available);
-    await q(`update erp_status set available = $1, note = $2, updated_at = now() where id = 1`, [available, available ? 'ERP online' : 'ERP down for maintenance']);
-    await q(`insert into audit_log (actor, action, note) values ($1, 'erp_status_changed', $2)`, [req.user.display_name, available ? 'ERP marked online (demo)' : 'ERP marked down (demo)']);
-    res.json({ ok: true });
-  }));
+  // ERP outage simulation lives in scripts/erp.sh (test tooling), not in the client UI.
 }
 app.listen(process.env.PORT || 3001, () => console.log(`review screen on :${process.env.PORT || 3001} (demo mode: ${DEMO_MODE})`));

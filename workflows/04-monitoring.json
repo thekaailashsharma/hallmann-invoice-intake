@@ -1,0 +1,334 @@
+{
+  "id": "InvErrorHandler01",
+  "name": "Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# Monitoring\nSabine hears about problems from Avanai, not from a supplier.\n**When a workflow fails** (every workflow names this as its error workflow) and **every 15 minutes** (re-run emails stored but never finished; alert when queues age or the mailbox goes quiet). One alert per problem, repeats are counted; on-call gets an e-mail with where to look, never email content.",
+        "height": 200,
+        "width": 780,
+        "color": 3
+      },
+      "id": "883b7ffa-6a77-4507-a1a2-e3e5880b2699",
+      "name": "Note 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        -560
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "bbef2e95-afad-4cea-a876-1615a39eaf88",
+      "name": "Workflow failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with ex as (update alerts set occurrences = occurrences + 1, last_seen = now() where id = (select id from alerts where source = $1 and message = $2 and not acknowledged and ts > now() - interval '24 hours' order by ts desc limit 1) returning id), ins as (insert into alerts (severity, source, message, details) select 'critical', $1, $2, $3::jsonb where not exists (select 1 from ex) returning id) select (select id from ins) is not null as is_new, 'critical' as severity, $1 as source, $2 as message",
+        "options": {
+          "queryReplacement": "={{ [ 'workflow:' + ($json.workflow && $json.workflow.name || 'unknown'), String(($json.execution && $json.execution.error && $json.execution.error.message) || ($json.trigger && $json.trigger.error && $json.trigger.error.message) || 'Workflow failed').slice(0, 300), JSON.stringify({ execution_id: $json.execution && $json.execution.id, url: $json.execution && $json.execution.url, last_node: $json.execution && $json.execution.lastNodeExecuted }) ] }}"
+        }
+      },
+      "id": "01310ab5-35f2-4d3e-8c17-949f7664eaa3",
+      "name": "Record failure",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        -140,
+        -200
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "e26d760b-4f08-4b9b-91a6-5ef88cd75b48",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -380,
+        60
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "236d28cb-d495-45a6-8b46-dafbabf74c5f",
+      "name": "Run now",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select e.message_id, e.from_addr, e.subject, e.body, e.received_at, e.attachments from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '10 minutes' order by e.created_at limit 20",
+        "options": {}
+      },
+      "id": "ffead351-a8b7-448f-b63b-9be698a2a3fe",
+      "name": "Unfinished emails",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        -140,
+        260
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "InvIntake00000001"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "id": "32570ced-b5c6-4286-8fe2-5af478773f5e",
+      "name": "Re-run intake",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        100,
+        260
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select * from (select 'warning' as severity, 'ERP bookings waiting more than 2 hours' as message, count(*) as n from documents where status = 'pending_erp' and updated_at < now() - interval '2 hours' having count(*) > 0 union all select 'warning', 'Invoices waiting for review more than 2 working days', count(*) from documents where status = 'needs_review' and created_at < now() - interval '2 days' having count(*) > 0 union all select 'critical', 'Emails received but not processed after 30 minutes', count(*) from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '30 minutes' having count(*) > 0 union all select 'warning', 'No email received for 4 hours during business hours (mailbox connection?)', 0 from (select max(created_at) as m from inbound_emails) x where extract(isodow from now() at time zone 'Europe/Berlin') < 6 and extract(hour from now() at time zone 'Europe/Berlin') between 9 and 17 and (x.m is null or x.m < now() - interval '4 hours')) f",
+        "options": {}
+      },
+      "id": "79d6ae84-3632-46d6-bf6e-be29393b9949",
+      "name": "Health checks",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        -140,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with ex as (update alerts set occurrences = occurrences + 1, last_seen = now() where id = (select id from alerts where source = 'watchdog' and message = $2 and not acknowledged and ts > now() - interval '24 hours' order by ts desc limit 1) returning id), ins as (insert into alerts (severity, source, message, details) select $1, 'watchdog', $2, jsonb_build_object('count', $3)::jsonb where not exists (select 1 from ex) returning id) select (select id from ins) is not null as is_new, $1 as severity, 'watchdog' as source, $2 as message",
+        "options": {
+          "queryReplacement": "={{ [ $json.severity, $json.message, $json.n ] }}"
+        }
+      },
+      "id": "e4ec807f-3913-4d3a-a7b2-8fc238a0a8f6",
+      "name": "Raise alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        100,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "98b692f1-ef1c-4d57-8bc5-48d71ba7b773",
+              "leftValue": "={{ $json.is_new !== false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3966cf0f-82d4-4fcb-a0ce-57cb990cb51a",
+      "name": "New alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        360,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "intake-bot@hallmann.example",
+        "toEmail": "oncall@avanai.example",
+        "subject": "=[Hallmann intake · {{ $json.severity }}] {{ $json.message }}",
+        "emailFormat": "text",
+        "text": "={{ $json.message }}\n\nSource: {{ $json.source }}\nTime: {{ $now.toISO() }}\n\nReview screen: http://localhost:3001  ·  n8n executions: http://localhost:5678/home/executions",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "99aa8dbf-7f72-467c-80b3-a1340c2b40ec",
+      "name": "E-mail Avanai on-call",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        60
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Workflow failed": {
+      "main": [
+        [
+          {
+            "node": "Record failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unfinished emails": {
+      "main": [
+        [
+          {
+            "node": "Re-run intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 minutes": {
+      "main": [
+        [
+          {
+            "node": "Unfinished emails",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run now": {
+      "main": [
+        [
+          {
+            "node": "Unfinished emails",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Health checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health checks": {
+      "main": [
+        [
+          {
+            "node": "Raise alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Raise alert": {
+      "main": [
+        [
+          {
+            "node": "New alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New alert?": {
+      "main": [
+        [
+          {
+            "node": "E-mail Avanai on-call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record failure": {
+      "main": [
+        [
+          {
+            "node": "New alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "Europe/Berlin",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 300
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

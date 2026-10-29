@@ -16,8 +16,17 @@ services:
       timeout: 3s
       retries: 20
 
+  mailbox:
+    # Stand-in for Hallmann's invoice mailbox (IMAP 3143, SMTP 3025). Production: the real M365/IMAP mailbox.
+    image: greenmail/standalone:2.1.3
+    container_name: intake-mailbox
+    environment:
+      - GREENMAIL_OPTS=-Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=rechnungen:${MAILBOX_PASSWORD:-mailbox}@hallmann.example -Dgreenmail.users.login=email -Dgreenmail.verbose
+    ports: ["3025:3025", "3143:3143"]
+    restart: unless-stopped
+
   n8n:
-    image: n8nio/n8n:latest
+    image: n8nio/n8n:2.45.5
     container_name: intake-n8n
     depends_on:
       postgres: { condition: service_healthy }
@@ -51,6 +60,7 @@ services:
     environment:
       - DATABASE_URL=postgres://intake:${POSTGRES_PASSWORD:-intake}@postgres:5432/intake
       - N8N_WEBHOOK_BASE=${N8N_WEBHOOK_BASE:-http://n8n:5678/webhook}
+      - N8N_WEBHOOK_KEY=${N8N_WEBHOOK_KEY}
       - PORT=3001
       - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
       - FIREBASE_API_KEY=${FIREBASE_API_KEY}

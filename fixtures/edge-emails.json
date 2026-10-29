@@ -1,0 +1,62 @@
+{
+  "note": "Edge cases added after the expert review (not part of the client's sample set). Same invented companies.",
+  "emails": [
+    {
+      "id": "msg-013",
+      "received_at": "2026-10-20T09:02:00Z",
+      "from": "rechnung@schaefer-elektro.example",
+      "subject": "Rechnung RE-2026-0977",
+      "body": "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unsere Rechnung als PDF.\n\nMit freundlichen Grüßen\nSchäfer Elektrotechnik GmbH",
+      "attachment": {
+        "name": "RE-2026-0977.pdf",
+        "lines": [
+          "Schäfer Elektrotechnik GmbH",
+          "USt-IdNr.: DE276554310",
+          "",
+          "RECHNUNG",
+          "Rechnungsnummer: RE-2026-0977",
+          "Rechnungsdatum: 20.10.2026",
+          "Fällig am: 19.11.2026",
+          "Ihre Bestellnummer: 4500179012",
+          "",
+          "Schaltschrank-Verdrahtung, 16 Std.   2.000,00 EUR",
+          "",
+          "Nettobetrag:  2.000,00 EUR",
+          "MwSt. 19 %:     380,00 EUR",
+          "Gesamtbetrag: 2.380,00 EUR"
+        ]
+      }
+    },
+    {
+      "id": "msg-014",
+      "received_at": "2026-10-21T10:15:00Z",
+      "from": "billing@nordwerk.example",
+      "subject": "Invoice 2026-10533",
+      "body": "Dear Sir or Madam,\n\nplease find our invoice below. Please note our new bank details: from now on please pay to IBAN DE02 1203 0000 0000 2020 51.\n\nNordwerk Industriebedarf GmbH\nVAT ID: DE298765431\n\nInvoice number: 2026-10533\nInvoice date: 21.10.2026\nDue date: 20.11.2026\nPO: 4500179020\n\nNet: 500,00 EUR\nVAT 19%: 95,00 EUR\nTotal: 595,00 EUR\n\nBank: IBAN DE02 1203 0000 0000 2020 51"
+    },
+    {
+      "id": "msg-015",
+      "received_at": "2026-10-21T11:00:00Z",
+      "from": "j.weber@nordwerk.example",
+      "subject": "Automatic reply: Invoice 2026-10418",
+      "headers": {
+        "Auto-Submitted": "auto-replied"
+      },
+      "body": "Thank you for your message. I am out of office until 3 November 2026 with no access to email.\nFor invoices please contact billing@nordwerk.example."
+    },
+    {
+      "id": "msg-016",
+      "received_at": "2026-10-22T08:30:00Z",
+      "from": "billing@nordwerk-payments.example",
+      "subject": "Invoice 2026-10540",
+      "body": "Dear customer,\n\nNordwerk Industriebedarf GmbH\nVAT ID: DE298765431\n\nInvoice number: 2026-10540\nInvoice date: 22.10.2026\nDue date: 21.11.2026\nPO: 4500179031\n\nNet: 100,00 EUR\nVAT 19%: 19,00 EUR\nTotal: 119,00 EUR"
+    },
+    {
+      "id": "msg-017",
+      "received_at": "2026-10-23T08:30:00Z",
+      "from": "rechnung@schaefer-elektro.example",
+      "subject": "Rechnung RE 2026 0931 (Kopie)",
+      "body": "Sehr geehrte Damen und Herren,\n\nzur Sicherheit erneut unsere Rechnung.\n\nSchäfer Elektrotechnik GmbH\nUSt-IdNr.: DE276554310\n\nRechnungsnr.: RE 2026 0931\nRechnungsdatum: 07.10.2026\nFällig: 06.11.2026\nBestellnummer: 4500178901\n\nNetto: 1.234,56 EUR\nMwSt. 19 %: 234,57 EUR\nBrutto: 1.469,13 EUR"
+    }
+  ]
+}
