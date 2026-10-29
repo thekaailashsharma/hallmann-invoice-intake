@@ -18,7 +18,7 @@
           ]
         }
       },
-      "id": "07a164af-6ae9-4efb-be9d-46d5b13ccb7b",
+      "id": "8041f8ab-c9bd-4a94-98c0-dd6cf97bd955",
       "name": "Book now (called)",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -38,7 +38,7 @@
           ]
         }
       },
-      "id": "5489406b-4677-4b45-89f1-f338f5cdc8cf",
+      "id": "6556b754-a0a8-4b6a-9ca7-dea1b7e15f82",
       "name": "Every 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
@@ -49,7 +49,7 @@
     },
     {
       "parameters": {},
-      "id": "a91aabaf-8d6f-48c3-9868-9c1b7d87b3eb",
+      "id": "11475f10-4b3c-4eb4-b99b-26069036f53c",
       "name": "Run now",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -64,7 +64,7 @@
         "query": "select id as document_id, 'system' as actor from documents where status = 'pending_erp' and erp_attempts < 3 and (booking_started_at is null or booking_started_at < now() - interval '2 minutes') order by created_at limit 50",
         "options": {}
       },
-      "id": "c20dd930-7c0c-4936-8e94-68d61b388234",
+      "id": "5dabc907-372d-475a-84ac-b42effc24df8",
       "name": "Waiting bookings",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -84,7 +84,7 @@
           "queryReplacement": "={{ [ $json.document_id, $json.actor || 'system' ] }}"
         }
       },
-      "id": "5325dbe2-1504-4217-af7c-03ae8e33fc99",
+      "id": "3dc2878b-e841-4779-99fb-9b5df17c4b14",
       "name": "Claim document",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -115,7 +115,7 @@
           }
         }
       },
-      "id": "d5789b2c-7ff7-4cdd-a755-03104c38d22b",
+      "id": "492fe2cd-532f-4460-9e55-5cbb4c8e4171",
       "name": "Send to ERP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -133,7 +133,7 @@
         "jsCode": "// Map the ERP's HTTP answer to one outcome. Network errors (no answer after 3 quick tries) arrive on the error output as 'down'.\nconst doc = $('Claim document').item.json; const code = Number($json.statusCode || 0); const body = $json.body || {};\n// Booked only with the ERP's own booking id: some systems answer maintenance with a '200 OK' web page.\nconst outcome = (code === 200 || code === 201) && body && body.id ? 'booked' : (code === 200 || code === 201) ? 'error' : code === 409 ? 'duplicate' : [400, 404, 422].includes(code) ? 'rejected' : [0, 502, 503, 504].includes(code) || !code ? 'down' : 'error';\nconst msg = outcome === 'booked' ? 'Booked in ERP.' : outcome === 'down' ? `ERP not reachable (${code || ($json.error && $json.error.message) || 'no answer'}). Waiting; retried every 5 minutes.`\n  : `ERP answered ${code}: ${typeof body === 'object' ? (body.error || JSON.stringify(body)) : String(body).slice(0, 200)}${body.fields ? ' (' + body.fields.join(', ') + ')' : ''}`;\nreturn { json: { document_id: doc.id, actor: doc.actor, outcome, erp_id: body.id || null, msg } };",
         "mode": "runOnceForEachItem"
       },
-      "id": "6526a5bf-69e3-4d80-85cd-d5982441f170",
+      "id": "96f60301-6a0a-481a-b329-d3f0cb318a74",
       "name": "Read ERP answer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -147,13 +147,13 @@
         "assignments": {
           "assignments": [
             {
-              "id": "582880f1-1e61-4dfb-b728-331137c22785",
+              "id": "373627e3-dd5b-44b5-b15b-1822813e8cda",
               "name": "statusCode",
               "value": 0,
               "type": "number"
             },
             {
-              "id": "02a97f77-685c-4df9-aad4-f562a73a79c5",
+              "id": "4db68c97-b65b-46ce-bcfc-d485dd42c9cb",
               "name": "body",
               "value": "={{ { error: ($json.error && $json.error.message) || 'no answer (timeout or connection refused)' } }}",
               "type": "object"
@@ -162,7 +162,7 @@
         },
         "options": {}
       },
-      "id": "981b14d3-0e04-4fe2-b7d5-92b3706dc019",
+      "id": "01cb331c-b3be-40a9-b4a4-cc43d6fd4737",
       "name": "No answer from ERP",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
@@ -179,7 +179,7 @@
           "queryReplacement": "={{ [ $json.document_id, $json.outcome, $json.erp_id, $json.msg, $json.actor ] }}"
         }
       },
-      "id": "51fd5b9e-a94e-4bbd-a1a9-4564fbbef5c8",
+      "id": "f1f61f18-4b0b-4a82-8890-3cbc21590131",
       "name": "Record result",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -205,7 +205,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "7abe0f85-1c99-4a14-82c0-f4cb53ae4494",
+                    "id": "6bb3e8e0-7ba0-44d7-b210-65102996e03e",
                     "leftValue": "={{ $json.outcome === 'down' }}",
                     "rightValue": "",
                     "operator": {
@@ -230,7 +230,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "4c5990ae-bdd0-40e3-816c-9d64652a086f",
+                    "id": "b2ba1a2a-a099-4590-8152-9d825caf47a7",
                     "leftValue": "={{ $json.handed_back }}",
                     "rightValue": "",
                     "operator": {
@@ -255,7 +255,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "d18515c6-f9f9-4158-a7d7-a5c78db2721a",
+                    "id": "7bdb52b0-110d-4322-a176-c67cf135a761",
                     "leftValue": "={{ $json.outcome === 'booked' }}",
                     "rightValue": "",
                     "operator": {
@@ -274,7 +274,7 @@
         },
         "options": {}
       },
-      "id": "befac1b1-1104-41e6-81dd-798830ef26d0",
+      "id": "2f0b8937-d414-4a2a-bad8-f5716d5cc233",
       "name": "What next?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -291,7 +291,7 @@
           "queryReplacement": "={{ [ $json.outcome === 'down' ? 'warning' : 'critical', $json.outcome === 'down' ? 'ERP not reachable; bookings wait and are retried every 5 minutes' : 'ERP booking returned to review: ' + ($json.outcome === 'rejected' ? 'ERP refused it' : 'failed 3 times'), $json.document_id, $json.msg ] }}"
         }
       },
-      "id": "b153c064-9364-4bd7-b6f8-5e1f8419eef2",
+      "id": "5101ad60-b692-4689-a5e1-53d1be6684d9",
       "name": "Alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -309,7 +309,7 @@
         "query": "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and not acknowledged returning id",
         "options": {}
       },
-      "id": "1d1d3971-1b01-4b08-8166-1243e21cfb05",
+      "id": "21120150-18d4-4800-89cd-c19ccf3e7c20",
       "name": "Close ERP-down alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -334,7 +334,7 @@
           },
           "conditions": [
             {
-              "id": "1e62f58f-b5b9-48f0-93e5-bc4440c04499",
+              "id": "eb7563f6-08f4-4d8e-8f23-6e8d98fb731a",
               "leftValue": "={{ $json.is_new }}",
               "rightValue": true,
               "operator": {
@@ -348,7 +348,7 @@
         },
         "options": {}
       },
-      "id": "98969641-c676-4f06-bf32-1a7df269c408",
+      "id": "045890d3-54ba-4845-bdd9-e84fdca0a86d",
       "name": "New alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -368,7 +368,7 @@
           "appendAttribution": false
         }
       },
-      "id": "1cd17435-8b6e-48f5-9667-5c393f302f96",
+      "id": "579d63f5-91ad-4985-9f4c-ba43276d1d8e",
       "name": "E-mail Avanai on-call",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
@@ -388,7 +388,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "2eec99f3-16a8-4eaf-9022-b5e5c9f7ef35",
+      "id": "d6ab56f3-ae0b-4c06-996a-3c75f87479d8",
       "name": "Note 14",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -404,7 +404,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "72a5207a-04e5-447e-bd6d-a7a44cf882b8",
+      "id": "a407f9d4-0b8d-44b5-95cf-7dc34fb50a4f",
       "name": "Note 15",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -420,7 +420,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "6745ba74-af1c-495d-929f-7cdeb66ec536",
+      "id": "49fbc9f2-3f84-426b-8c81-f96d19c274fa",
       "name": "Note 16",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -436,7 +436,7 @@
         "width": 680,
         "color": 7
       },
-      "id": "52469e71-5826-41f3-918c-8bb0c349435e",
+      "id": "24865d5f-6801-467b-ab4d-e7714b1be7f6",
       "name": "Note 17",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
