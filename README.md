@@ -1,58 +1,88 @@
-# Invoice intake for Hallmann Maschinenbau
+# Invoice intake for Hallmann Maschinenbau — Avanai trial task
 
-Jana and Thomas spend most of their week typing supplier invoices into the ERP. This project takes that work off their desk. Invoices arrive by email, the system reads them, and the ones that are clearly correct are booked in the ERP on their own. Anything the system is not sure about goes to Jana and Thomas, with the reason written next to it.
+![Invoice journey](docs/img/journey.gif)
 
-You can try the review screen at https://hallmann-invoices.vercel.app. There is also a short visual walkthrough in `docs/invoice-journey.pdf`, the n8n workflows are in `workflows/`, and the list of what is needed before go-live is in `docs/PRODUCTION-CHECKLIST.md`.
+Supplier invoices arrive in a mailbox. n8n reads them, the AI extracts the fields, **deterministic rules decide**, and only clean invoices are booked in the ERP. Everything else goes to Jana and Thomas on a simple review screen, with the reason and the original PDF next to the fields. Nothing is lost, nothing is booked twice, and every change is in an append-only audit log.
 
-## The journey
-
-![The invoice journey across the five n8n workflows](docs/img/journey-flow.png)
+- **Review screen (live demo):** https://hallmann-invoices.vercel.app (Google sign-in, allow-listed accounts)
+- **One-page visual walkthrough:** [docs/invoice-journey.pdf](docs/invoice-journey.pdf)
+- **n8n workflows:** [workflows/](workflows/) (import guide inside)
+- **Before go-live:** [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md)
 
 ## Run it
 
-Copy `.env.example` to `.env` and fill in the keys. Then start everything and send the sample emails into the mailbox:
-
 ```bash
-./scripts/setup.sh
-python3 scripts/send-emails.py
+cp .env.example .env            # SARVAM_API_KEY, passwords, Firebase web config, INITIAL_ADMIN_EMAIL
+./scripts/setup.sh              # Postgres, mailbox, mock ERP, review app, n8n; credentials + workflows imported
+python3 scripts/send-emails.py  # deliver the 12 sample emails (+ edge cases) to the invoice mailbox
+open http://localhost:3001      # review screen        ·  n8n: http://localhost:5678
 ```
+`scripts/demo-reset.sh` wipes the data and loads a 12-email hands-on set. `scripts/erp.sh down|up` simulates unannounced ERP maintenance.
 
-The review screen runs on http://localhost:3001 and n8n on http://localhost:5678.
+## 1. How it is built, and why
 
-## How it is built, and why
+| Workflow | Job |
+|---|---|
+| **Invoice Intake** | Reads the mailbox (IMAP or Gmail). Stores every email and its original files in Postgres **before** anything can fail, labels Gmail mail "Processed", then hands each email to its own run. |
+| **Process Email** | Reads every PDF/XML attachment (XRechnung/ZUGFeRD fields straight from the XML). Guardrails check for manipulation. The AI classifies 7 types (invoice, credit note, reminder, proforma, order confirmation, statement, other) and extracts fields. The **rules decide**; one save node; clean invoices go to booking. |
+| **ERP Booking** | The only place that writes to the ERP: claim (row lock) → real-time API call → the ERP's answer decides (booked · 409 duplicate · 4xx back to a person · 503/no answer = maintenance, retried every 5 min). Never twice: the document id is the idempotency key. |
+| **Review Decision** | Approve / save / reject / reopen from the screen. Shared secret on the webhook, role re-read from the user table, the same rules re-run, before/after written to the audit log. |
+| **Monitoring** | Any workflow failure, plus a 15-minute watchdog (stuck emails, old queues, silent mailbox) → one alert per problem and an e-mail to Avanai on-call. |
 
-The work is split into five n8n workflows, each with one job. Invoice Intake reads the mailbox and saves every email and its attachments before anything else happens. Process Email reads the invoice, whether it is in the email text, a PDF or an XRechnung file, and decides what to do with it. ERP Booking is the only part that writes to the ERP. Review Decision handles what Jana and Thomas do on the screen. Monitoring tells Avanai when something goes wrong.
+**Why it is shaped like this**
+- **The AI never decides.** Sabine's past tool mixed up net and gross unnoticed. Here the model only reads; a plain-JavaScript validator (`shared/validate.js`, unit-tested, byte-identical in n8n and the review app) is the only gate. Every amount, the invoice number and the VAT ID must literally appear in the document, net + VAT must equal gross, the VAT rate must fit the country, and duplicates are matched even when the number is written differently.
+- **Fraud is a booking problem too.** A supplier master (VAT ID, IBAN, sender domains) catches unknown suppliers, changed bank details and look-alike senders. Auto-booking is capped at 10,000 € (the clerk limit).
+- **People stay in control, visibly.** Red fields must be fixed, amber items can be accepted with a note, and a lead can force a booking through a confirmation popup (logged as FORCED; the ERP still rejects contradictory amounts). Amounts auto-calculate from gross; foreign currencies show today's ECB rate.
+- **Nothing gets lost.** IMAP marks mail read on fetch, so the email is stored first; Monitoring re-runs anything without a result. Emails with nothing to book are reduced to metadata (data minimisation).
+- **Postgres, not n8n Data Tables**, because auditors need transactions, unique keys and an append-only log the review app can read.
 
-The most important decision was that the AI never decides what gets booked. Sabine's last tool mixed up net and gross for weeks without anyone noticing, so here the AI only reads the invoice. A set of plain rules then checks what it read. Every amount, the invoice number and the VAT ID must actually appear in the document, and net plus VAT must equal gross. If anything doesn't add up, the invoice goes to a person instead of the ERP.
+**Mailbox access.** Gmail/IMAP permissions always cover a whole mailbox, so the real control is a dedicated invoice mailbox set up by Hallmann IT. The Gmail credential uses `gmail.modify` (read + label) instead of n8n's full-access default; the workflow has no send or delete node.
 
-The same rules catch the things Sabine listed. A resent invoice is recognised as a duplicate, even when the number is written a little differently. Reminders, proformas and meeting emails are recorded but never booked. Forwarded invoices from colleagues are read like any other. Credit notes are booked as credit notes. German and English both work. On top of that, the rules flag unknown suppliers, changed bank details and emails from look-alike addresses, because those are how invoice fraud usually happens. Nothing above 10,000 € is booked without a person, which is the same limit a clerk has.
+**Assumptions I made where the brief was open**
+- "Several hundred a month" means a few per hour: emails are processed strictly one at a time, so correctness beats speed.
+- An invoice may arrive in the email body (as in the samples), as a PDF, or as an XRechnung/ZUGFeRD e-invoice; all three are handled.
+- "Nothing wrong in the ERP" outranks "books itself": anything the rules cannot prove goes to a person, and auto-booking stops at 10,000 € gross.
+- Jana and Thomas are clerks (approve up to 10,000 €); Sabine is a lead (approves above that, accepts exceptions, reopens rejections). Sign-in is Google with an allow-list.
+- Foreign-currency invoices and non-EU VAT are booked only after a person confirms them.
+- The ERP is unknown, so ERP Booking talks to a mock booking API with the behaviour of a real one (idempotency, 409, 503).
+- "Hear it from you" means e-mail to Avanai on-call today; the channel is configurable.
 
-Nothing gets lost along the way. Every email is saved before the system starts working on it, so if a step fails, it can pick up again later. When the ERP is down for maintenance, the invoice simply waits and the system tries again every five minutes. Each invoice is booked once, even if the ERP is asked twice.
+## 2. How I know it works
 
-The review screen is kept simple. Jana and Thomas see the original PDF next to the fields the system read. Fields that are wrong are marked red, and things that only need a second look are marked amber. When they change a number, the related amounts update on their own. A lead can still force a booking if needed, and that is logged clearly. Every change is saved with who made it, when, and what the values were before and after, so the auditors' question finally has an answer.
+| Suite | What it proves |
+|---|---|
+| `npm test` (30 tests) | Validator rules incl. grounding, fraud, tax, dates, number formats; workflow structure (wiring, webhook auth, retries, no secrets in exports, validator not drifted) |
+| `scripts/e2e.py` (19 emails) | The client's 12 samples + edge cases through a **real mailbox**: duplicates, reminders, credit notes, forwards, injection, PDF-only, proforma, invoice + T&C PDF, look-alike sender, changed IBAN |
+| `scripts/format-test.py` (26 cases, 25 as expected) | Real-world layouts: tables, two pages, two VAT rates, Skonto, US/UK/German dates, two-column, French number format, XRechnung, official ZUGFeRD and Factur-X samples, a real Hetzner invoice |
+| `scripts/outage-test.py` | ERP down without notice → waits, one alert, one e-mail; ERP back → booked exactly once, alert closed |
 
-All of this is stored in Postgres, because the auditors need a record that cannot be quietly changed afterwards.
+![ERP down, then booked exactly once](docs/img/erp-down.gif)
 
-## How I know it works
+Also verified by hand: Gmail end to end on a real account (invoice booked, label applied), the review screen flows, forced approval refused by the ERP and logged.
 
-I tested it in four ways. There are 30 unit tests on the rules and on how the workflows are wired, and they all pass. I sent Sabine's 12 sample emails plus 7 harder cases through a real mailbox, one at a time, and every one ended up where it should. I also tested 26 different invoice layouts, including multi-page invoices, two VAT rates, US dates, XRechnung and official ZUGFeRD samples. 25 of them behave as expected, and the one that doesn't still goes safely to a person. Finally, I switched the ERP off in the middle of a booking: the invoice waited, Avanai got one email, and once the ERP was back the invoice was booked exactly once. I also tested the whole flow with a real Gmail account.
+## 3. Before a real client
 
-## What I would add before this runs for a real client
-
-The biggest piece is Hallmann's real ERP. Today the system books into a mock that behaves like a real booking API, so we need to know which ERP Hallmann uses and get access to a test system. The AI model should move to a provider hosted in the EU, with a data processing agreement, since the current one is hosted in India. Hallmann IT would set up a dedicated invoice mailbox, and the system needs proper hosting with HTTPS and backups. The supplier list should be synced from the ERP every night. Before any invoice is booked automatically, I would run a pilot on real invoices with automatic booking switched off, to see how often the system gets it right.
-
-## What I didn't finish
-
-Scanned PDFs without text still go to a person, because there is no OCR yet. Invoices with two VAT rates also go to a person, and early-payment discounts (Skonto) are not captured. The check for manipulated emails sometimes flags genuine e-invoices. That is safe, because they go to a person, but it needs tuning on real mail. And the live demo runs on my laptop through a tunnel, not on a proper server.
-
-## What I assumed
-
-Where the brief left things open, I made these calls. Several hundred invoices a month is a few per hour, so emails are handled one at a time and correctness matters more than speed. An invoice can arrive as email text, a PDF or an e-invoice file. Being correct matters more than being automatic, so anything the rules cannot prove goes to a person. Jana and Thomas are clerks and Sabine is a lead. Invoices in foreign currencies, or with VAT from outside the EU, always need a person.
+The short version (full list in [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-CHECKLIST.md)):
+1. **Hallmann's ERP.** We built against a booking contract and a mock ERP. Need: which ERP (SAP, Business Central, proALPHA, DATEV…), its posting API and test system, where account / cost centre / tax code come from, and what it answers during maintenance.
+2. **EU-hosted model under a DPA.** Sarvam-105B was used because a key was at hand (hosted in India). Production: Mistral, Azure OpenAI EU or Claude via Bedrock Frankfurt; one credential change, then re-run the suites.
+3. **Dedicated mailbox, real hosting** (server, HTTPS, backups, secrets), supplier master synced nightly from the ERP.
+4. **A pilot on real, anonymised Hallmann invoices** before switching auto-booking on.
 
 ## What I propose next
 
-First, connect Hallmann's ERP test system, the real mailbox and an EU-hosted model. Then run a pilot for about four weeks with automatic booking switched off, so every invoice still goes to Jana and Thomas and we can measure how often the system was right. Once Sabine is happy with the numbers, we switch automatic booking on, one supplier at a time.
+1. **Week 1–2:** connect Hallmann's ERP sandbox and mailbox, EU-hosted model, deploy on a Hallmann/Avanai server.
+2. **Week 3–6, pilot:** real invoices, auto-booking **off**. Every invoice goes to Jana and Thomas, the system shows what it would have done; we measure how often it was right.
+3. **Then:** switch auto-booking on supplier by supplier once the numbers are agreed; Sabine gets a weekly digest (volume, auto-book rate, open items).
+
+## 4. What I didn't finish
+
+- **Guardrails false positives:** the AI jailbreak check flagged 2 of 6 official e-invoice samples. Fail-safe (they go to a person), but noisy; needs tuning on real Hallmann mail.
+- **Total-only invoices** where the AI copies the total into "net" go to a person with "0% VAT without a note" instead of the clearer "only a total is shown".
+- **Scanned PDFs** (no text layer) go to a person; OCR is a go-live item.
+- **Several VAT rates on one invoice** always go to a person; no VAT breakdown yet. Skonto terms are not captured.
+- **Suppliers without a VAT ID** (outside the EU) are matched for duplicates less reliably.
+- **Hosting:** the live demo is the review screen on Vercel, with its API tunnelled to the stack on my machine. It is a demo link, not a deployment.
 
 ## Where I used AI coding tools
 
-I used Claude Code as a pair programmer throughout: it wrote much of the code and the tests and helped review the design. The product decisions, the rules and the hands-on testing are mine.
+Built with Claude Code (Anthropic) as a pair programmer: it wrote most of the code (n8n workflow generator, validator and tests, review app, scripts), ran the test suites, and reviewed the design with separate review passes (n8n platform, accounts-payable edge cases, reliability and LLM safety). I made the product and design decisions, set the rules, tested the flows by hand (including Gmail end to end on a real account) and reviewed the output. Inside the product, the AI (Sarvam-105B via n8n's LangChain nodes) only classifies and extracts; it never decides what is booked.
