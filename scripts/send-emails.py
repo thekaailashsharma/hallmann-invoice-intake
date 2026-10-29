@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Delivers the sample emails into the invoice mailbox over SMTP, exactly like a supplier would.
 n8n's IMAP trigger picks them up. Usage: python3 scripts/send-emails.py [--only msg-006] [--host localhost --port 3025]"""
-import json, pathlib, smtplib, sys
+import json, pathlib, smtplib, sys, time
 from email.message import EmailMessage
 from email.utils import format_datetime
 from datetime import datetime
@@ -9,8 +9,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 arg = lambda k, d: sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
 only, host, port = arg("--only", None), arg("--host", "localhost"), int(arg("--port", "3025"))
 TO = "rechnungen@hallmann.example"
-emails = json.loads((ROOT / "fixtures" / "sample-emails.json").read_text())["emails"]
-if "--samples-only" not in sys.argv: emails += json.loads((ROOT / "fixtures" / "edge-emails.json").read_text())["emails"]
+if "--file" in sys.argv: emails = json.loads((ROOT / arg("--file", "")).read_text())["emails"]
+else: emails = json.loads((ROOT / "fixtures" / "sample-emails.json").read_text())["emails"]
+if "--samples-only" not in sys.argv and "--file" not in sys.argv: emails += json.loads((ROOT / "fixtures" / "edge-emails.json").read_text())["emails"]
 
 def pdf(lines):
     """Minimal one-page text PDF (Helvetica, WinAnsi), enough for any PDF text extractor."""
@@ -30,7 +31,7 @@ with smtplib.SMTP(host, port, timeout=20) as s:
         if only and e["id"] != only: continue
         m = EmailMessage()
         m["From"], m["To"], m["Subject"] = e["from"], TO, e["subject"]
-        m["Message-ID"] = f"<{e['id']}@trial.hallmann.example>"   # stable id: re-sending the same mail is a no-op downstream
+        m["Message-ID"] = f"<{e['id']}-{int(time.time())}@trial.hallmann.example>" if "--fresh" in sys.argv else f"<{e['id']}@trial.hallmann.example>"   # stable id: re-sending the same mail is a no-op downstream
         m["Date"] = format_datetime(datetime.fromisoformat(e["received_at"].replace("Z", "+00:00")))
         for k, v in (e.get("headers") or {}).items(): m[k] = v
         m.set_content(e["body"])
