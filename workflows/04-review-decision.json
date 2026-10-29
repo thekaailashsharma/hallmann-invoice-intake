@@ -9,7 +9,7 @@
         "width": 760,
         "color": 1
       },
-      "id": "f40ddda7-f297-453d-8331-d18869f26ee8",
+      "id": "c6b05ab6-4a4a-4d78-b792-40e1a4613c93",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -25,7 +25,7 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "7009717e-a1c0-4d94-be95-70e87d6108a5",
+      "id": "f57d6e01-c26b-491f-9cb8-1d7485f94916",
       "name": "Decision In",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
@@ -43,7 +43,7 @@
           "queryReplacement": "={{ [ String($json.body.document_id || '').match(/^[0-9a-f-]{36}$/) ? $json.body.document_id : '00000000-0000-0000-0000-000000000000' ] }}"
         }
       },
-      "id": "fd766a24-873d-4634-8fce-34af1c0d8789",
+      "id": "a524aa52-4d80-495b-8d58-57cb576dd977",
       "name": "Load document",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -57,7 +57,7 @@
       "parameters": {
         "jsCode": "// Deterministic invoice validation. The ONLY gate between the LLM and the ERP.\n// Used verbatim inside the n8n \"Validate\" Code node (synced by scripts/build-workflows.py)\n// and by the review app (so a human correction is checked by the same rules). No imports.\n\nconst ALLOWED_VAT_RATES = { DE: [0, 7, 19], AT: [0, 10, 13, 20], NL: [0, 9, 21], GB: [0, 5, 20], FR: [0, 5.5, 10, 20], ES: [0, 10, 21], IT: [0, 10, 22], PL: [0, 8, 23] };\nconst EU = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']);\nconst VAT_ID_RE = {\n  DE: /^DE\\d{9}$/, AT: /^ATU\\d{8}$/, NL: /^NL\\d{9}B\\d{2}$/, GB: /^GB(\\d{9}|\\d{12})$/, FR: /^FR[A-Z0-9]{2}\\d{9}$/,\n  ES: /^ES[A-Z0-9]\\d{7}[A-Z0-9]$/, IT: /^IT\\d{11}$/, PL: /^PL\\d{10}$/, BE: /^BE0\\d{9}$/, CH: /^CHE\\d{9}(MWST|TVA|IVA)?$/,\n};\nconst INJECTION_PATTERNS = [\n  /ignore (all |any )?(previous|prior|above) instructions/i, /system (note|prompt|message) for/i, /automated processing/i,\n  /set the (total|amount|status)/i, /do not (send|route|flag).{0,40}(review|human)/i, /mark(ed)? as paid/i, /status to paid/i,\n  /you are (an? )?(ai|assistant|llm)/i, /disregard (the )?(above|previous)/i,\n];\nconst OWN_VAT_ID = 'DE811223344'; // Hallmann Maschinenbau GmbH\n\n/** \"1.234,56\" | \"1,234.56\" | \"1234.56\" | \"-178,50\" → number (or null). */\nfunction parseAmount(v) {\n  if (v === null || v === undefined || v === '') return null;\n  if (typeof v === 'number') return Number.isFinite(v) ? v : null;\n  let s = String(v).trim().replace(/[€$£]|EUR|USD|GBP/gi, '').replace(/\\s/g, '');\n  const neg = /^-|^\\(.*\\)$/.test(s); s = s.replace(/[()-]/g, '');\n  if (/,\\d{1,2}$/.test(s) && !/\\.\\d{1,2}$/.test(s)) s = s.replace(/\\./g, '').replace(',', '.');   // German 1.234,56\n  else s = s.replace(/,/g, '');                                                                  // English 1,234.56\n  const n = Number(s);\n  return Number.isFinite(n) ? (neg ? -n : n) : null;\n}\n/** Accepts ISO, DD.MM.YYYY, DD/MM/YYYY, \"30 September 2026\", \"October 8, 2026\" → YYYY-MM-DD (or null). */\nfunction parseDate(v) {\n  if (!v) return null;\n  const s = String(v).trim();\n  let m;\n  if ((m = s.match(/^(\\d{4})-(\\d{2})-(\\d{2})/))) return `${m[1]}-${m[2]}-${m[3]}`;\n  if ((m = s.match(/^(\\d{1,2})[./](\\d{1,2})[./](\\d{4})$/))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;\n  const MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12, januar: 1, februar: 2, märz: 3, mai: 5, juni: 6, juli: 7, oktober: 10, dezember: 12 };\n  if ((m = s.match(/^(\\d{1,2})\\.?\\s+([A-Za-zäöü]+)\\s+(\\d{4})$/)) && MONTHS[m[2].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}`;\n  if ((m = s.match(/^([A-Za-z]+)\\s+(\\d{1,2}),?\\s+(\\d{4})$/)) && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${String(MONTHS[m[1].toLowerCase()]).padStart(2, '0')}-${m[2].padStart(2, '0')}`;\n  const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);\n}\nfunction round2(n) { return Math.round(n * 100) / 100; }\nfunction detectInjection(text) {\n  const hits = INJECTION_PATTERNS.filter((re) => re.test(text || '')).map((re) => re.source);\n  return { flagged: hits.length > 0, patterns: hits };\n}\nfunction normalizeVatId(v) { return v ? String(v).toUpperCase().replace(/[\\s.-]/g, '').replace(/^USTIDNR:?/, '') : null; }\nfunction countryFromVatId(v) { const id = normalizeVatId(v); return id && /^[A-Z]{2}/.test(id) ? id.slice(0, 2) : null; }\n\n/**\n * @param {object} x  extraction from the LLM (strings allowed; this normalises)\n * @param {object} ctx { emailText, existingInvoiceNumbers: Set<string> keyed `${vatId}|${invoiceNumber}` }\n * @returns {{ normalized, reasons: string[], warnings: string[], decision: 'auto_book'|'needs_review'|'duplicate'|'ignore', injection }}\n */\nfunction validateInvoice(x, ctx = {}) {\n  const reasons = [], warnings = [];\n  const docType = ['invoice', 'credit_note'].includes(x.doc_type) ? x.doc_type : 'invoice';\n  const n = {\n    doc_type: docType,\n    supplier_name: (x.supplier_name || '').trim() || null,\n    supplier_vat_id: normalizeVatId(x.supplier_vat_id),\n    invoice_number: (x.invoice_number || '').trim() || null,\n    invoice_date: parseDate(x.invoice_date),\n    due_date: parseDate(x.due_date),\n    currency: (x.currency || '').toUpperCase().trim() || null,\n    po_number: (x.po_number || '').replace(/\\s/g, '') || null,\n    net_amount: parseAmount(x.net_amount),\n    vat_rate: parseAmount(x.vat_rate),\n    vat_amount: parseAmount(x.vat_amount),\n    gross_amount: parseAmount(x.gross_amount),\n    language: x.language || null,\n    related_invoice: (x.related_invoice || '').trim() || null,\n    line_items: Array.isArray(x.line_items) ? x.line_items : [],\n    reverse_charge: Boolean(x.reverse_charge),\n  };\n  n.supplier_country = countryFromVatId(n.supplier_vat_id) || (x.supplier_country || '').toUpperCase() || null;\n\n  const injection = detectInjection(ctx.emailText || '');\n  if (injection.flagged) reasons.push('Email contains instructions aimed at automated systems (possible manipulation). A person must check the amounts.');\n\n  // ── required fields ──\n  if (!n.supplier_name) reasons.push('Supplier name missing.');\n  if (!n.invoice_number) reasons.push(docType === 'credit_note' ? 'Credit note number missing.' : 'Invoice number missing.');\n  if (!n.invoice_date) reasons.push('Invoice date missing or unreadable.');\n  if (n.net_amount === null || n.gross_amount === null) reasons.push('Net or gross amount missing.');\n  if (n.vat_amount === null) { if (n.net_amount !== null && n.gross_amount !== null) n.vat_amount = round2(n.gross_amount - n.net_amount); else reasons.push('VAT amount missing.'); }\n  if (!n.currency) reasons.push('Currency missing.');\n\n  // ── supplier identity ──\n  if (!n.supplier_vat_id) reasons.push('Supplier VAT ID missing (needed to identify the supplier and detect duplicates).');\n  else if (n.supplier_vat_id === OWN_VAT_ID) reasons.push('Supplier VAT ID is our own VAT ID.');\n  else if (VAT_ID_RE[n.supplier_country] && !VAT_ID_RE[n.supplier_country].test(n.supplier_vat_id)) reasons.push(`Supplier VAT ID ${n.supplier_vat_id} has an invalid format for ${n.supplier_country}.`);\n\n  // ── money: the net/gross/VAT mix-up Sabine mentioned ──\n  if (n.net_amount !== null && n.vat_amount !== null && n.gross_amount !== null) {\n    if (Math.abs(round2(n.net_amount + n.vat_amount) - n.gross_amount) > 0.011) reasons.push(`Amounts do not add up: net ${n.net_amount} + VAT ${n.vat_amount} ≠ gross ${n.gross_amount}.`);\n    if (docType === 'invoice' && (n.net_amount < 0 || n.gross_amount < 0)) reasons.push('Negative amounts on an invoice (is this a credit note?).');\n    if (docType === 'credit_note' && (n.net_amount > 0 || n.gross_amount > 0)) reasons.push('Positive amounts on a credit note.');\n    if (Math.abs(n.gross_amount) > 50000) reasons.push('Gross amount above 50,000 EUR requires manual approval (policy).');\n    if (n.vat_rate !== null && n.net_amount !== 0) {\n      const expectedVat = round2(n.net_amount * n.vat_rate / 100);\n      if (Math.abs(expectedVat - n.vat_amount) > 0.02) reasons.push(`VAT ${n.vat_amount} does not match ${n.vat_rate}% of net ${n.net_amount} (expected ${expectedVat}).`);\n    } else if (n.vat_rate === null && n.net_amount) {\n      n.vat_rate = round2(n.vat_amount / n.net_amount * 100);\n    }\n    if (n.vat_rate !== null) {\n      const c = n.supplier_country; const allowed = ALLOWED_VAT_RATES[c];\n      if (allowed && !allowed.includes(n.vat_rate)) reasons.push(`VAT rate ${n.vat_rate}% is not a valid rate for ${c}.`);\n      if (c && c !== 'DE' && EU.has(c) && n.vat_rate !== 0) reasons.push(`EU supplier (${c}) charged ${n.vat_rate}% VAT; expected reverse charge at 0%.`);\n      if (c && c !== 'DE' && !EU.has(c) && n.vat_rate !== 0) reasons.push(`Non-EU supplier (${c}) charged ${n.vat_rate}% VAT; needs a tax check.`);\n    }\n  }\n  if (n.currency && n.currency !== 'EUR') reasons.push(`Currency ${n.currency}: non-EUR invoices are booked manually (exchange rate, tax).`);\n\n  // ── dates ──\n  if (n.invoice_date && n.due_date && n.due_date < n.invoice_date) reasons.push('Due date is before the invoice date.');\n  if (n.invoice_date && ctx.today && n.invoice_date > ctx.today) reasons.push('Invoice date is in the future.');\n  if (n.invoice_date && n.due_date) { const days = (Date.parse(n.due_date) - Date.parse(n.invoice_date)) / 86400000; if (days > 120) warnings.push(`Payment term of ${days} days is unusually long.`); }\n  if (!n.due_date) warnings.push('No due date given.');\n\n  // ── PO ──\n  if (!n.po_number) warnings.push('No purchase order number on the invoice.');\n  else if (!/^\\d{10}$/.test(n.po_number)) warnings.push(`PO number ${n.po_number} does not look like a Hallmann PO (10 digits).`);\n  if (docType === 'credit_note' && !n.related_invoice) warnings.push('Credit note does not reference an invoice.');\n\n  // ── duplicates (against what is already in the ERP / intake) ──\n  const key = n.supplier_vat_id && n.invoice_number ? `${n.supplier_vat_id}|${n.invoice_number}` : null;\n  const isDuplicate = key && ctx.existingInvoiceNumbers && ctx.existingInvoiceNumbers.has(key);\n\n  let decision = 'auto_book';\n  if (isDuplicate) decision = 'duplicate';\n  else if (reasons.length) decision = 'needs_review';\n  return { normalized: n, reasons, warnings, decision, injection, duplicateKey: key };\n}\n\nif (false) module.exports = { validateInvoice, parseAmount, parseDate, detectInjection, normalizeVatId, countryFromVatId, OWN_VAT_ID };\n\n\n// ── glue ──\nconst req = $('Decision In').item.json.body || {};\nconst before = $json;\nconst action = ['approve', 'save', 'reject', 'reopen'].includes(req.action) ? req.action : 'save';\nconst actor = String(req.actor || 'unknown').slice(0, 60);\nconst role = ['clerk', 'lead', 'admin'].includes(req.role) ? req.role : 'clerk';\nconst CLERK_LIMIT = 10000; // EUR gross; above this a lead or admin must approve\nif (!before.id) return [{ json: { ok: false, code: 404, reasons: ['Unknown document.'], action, actor, before } }];\nif (action === 'reopen') {\n  if (before.status !== 'rejected') return [{ json: { ok: false, code: 409, reasons: ['Only rejected documents can be reopened.'], action, actor, before } }];\n  if (role === 'clerk') return [{ json: { ok: false, code: 403, reasons: ['Only a lead or admin can reopen a rejected document.'], action, actor, before } }];\n  return [{ json: { ok: true, code: 200, action, actor, note: req.note || null, before } }];\n}\nif (!['needs_review', 'pending_erp'].includes(before.status)) return [{ json: { ok: false, code: 409, reasons: [`Document is ${before.status}; it cannot be changed.`], action, actor, before } }];\nconst fields = { ...req.fields, doc_type: req.fields?.doc_type || before.doc_type };\nconst existing = new Set(Array.isArray(before.existing_keys) ? before.existing_keys : []);\nconst r = validateInvoice(fields, { existingInvoiceNumbers: existing, today: new Date().toISOString().slice(0, 10) });\nlet ok = action !== 'approve' || r.decision === 'auto_book';\nlet code = ok ? 200 : 422;\nif (action === 'approve' && ok && role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) { ok = false; code = 403; r.reasons.unshift(`Gross amount above ${CLERK_LIMIT.toLocaleString('en')} EUR: a lead must approve this.`); }\nreturn [{ json: { ok, code, action, actor, role, note: req.note || null, reasons: r.reasons, warnings: r.warnings, normalized: r.normalized, before } }];"
       },
-      "id": "fc9ce1d6-2b3d-4346-b7ed-35af913c5ef6",
+      "id": "590d84b4-02db-465f-b22d-35a02537d9f3",
       "name": "Validate correction",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -77,7 +77,7 @@
           },
           "conditions": [
             {
-              "id": "4b8a6135-bd03-4fd3-b551-10382f87f671",
+              "id": "25d06d54-9967-4007-9411-670fbe1fd55a",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
               "operator": {
@@ -90,7 +90,7 @@
         },
         "options": {}
       },
-      "id": "30f3fc5d-ff09-4fbf-bf76-c77bc9271d99",
+      "id": "f5170017-0590-418d-bd7e-a91d102877db",
       "name": "Accepted?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -107,7 +107,7 @@
           "responseCode": "={{ $json.code }}"
         }
       },
-      "id": "88ea97f1-7b51-4151-b2fd-220ee17f950d",
+      "id": "355c54ab-8101-4775-93cc-3518e536af4d",
       "name": "Refuse",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
@@ -127,7 +127,7 @@
           },
           "conditions": [
             {
-              "id": "d896338a-cfe9-47d0-b36e-a3e195a7d92c",
+              "id": "e6b2eada-e4a8-4317-a649-b37c92eb7ceb",
               "leftValue": "={{ $json.action }}",
               "rightValue": "reopen",
               "operator": {
@@ -140,7 +140,7 @@
         },
         "options": {}
       },
-      "id": "18172e4f-94b7-4fe6-9536-cef00e0c5bf4",
+      "id": "89108b8a-3234-47e5-9088-f24b78df6697",
       "name": "Reopen?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -157,7 +157,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.actor, $json.note ] }}"
         }
       },
-      "id": "8917d8a1-a80f-4154-9aad-1ea32f8a51e3",
+      "id": "503a1f11-f028-4a07-9401-630ab5bbb3e0",
       "name": "Reopen",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -177,7 +177,7 @@
           },
           "conditions": [
             {
-              "id": "b4656c14-46b8-445e-898f-396a404587c9",
+              "id": "e5cbfc74-a21c-44f6-a8e5-484ac56d151a",
               "leftValue": "={{ $json.action }}",
               "rightValue": "reject",
               "operator": {
@@ -190,7 +190,7 @@
         },
         "options": {}
       },
-      "id": "19ce7039-32fb-4c87-bd57-feeda6c541ab",
+      "id": "0cca2682-a8ce-404f-802e-b027b49635b4",
       "name": "Reject?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -207,7 +207,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.actor, $json.note ] }}"
         }
       },
-      "id": "f3b6c079-007d-4134-9d86-ebed93647b85",
+      "id": "93e797ed-0ec9-4485-b95e-d46a9f5e34f9",
       "name": "Mark rejected",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -227,7 +227,7 @@
           },
           "conditions": [
             {
-              "id": "fa192e65-ec33-4a9a-8686-7af90f970685",
+              "id": "ca5e86c6-9674-4da6-9103-f819a989f774",
               "leftValue": "={{ $json.action }}",
               "rightValue": "approve",
               "operator": {
@@ -240,7 +240,7 @@
         },
         "options": {}
       },
-      "id": "7dd65b64-092d-4b24-aa1e-a79ffcecb336",
+      "id": "b0f30548-a896-44d4-9aa8-bb5e568de329",
       "name": "Approve?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -257,7 +257,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.normalized.doc_type, $json.normalized.supplier_name, $json.normalized.supplier_vat_id, $json.normalized.supplier_country, $json.normalized.invoice_number, $json.normalized.invoice_date, $json.normalized.due_date, $json.normalized.currency, $json.normalized.po_number, $json.normalized.net_amount, $json.normalized.vat_rate, $json.normalized.vat_amount, $json.normalized.gross_amount, $json.normalized.related_invoice, JSON.stringify($json.reasons), JSON.stringify($json.warnings), 'needs_review', $json.actor, 'corrected', JSON.stringify((({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }) => ({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }))($json.before)), JSON.stringify($json.normalized), 'Fields corrected; still open.' ] }}"
         }
       },
-      "id": "21beee14-1807-445d-aa2d-2389071fd247",
+      "id": "cd6cd5b1-4d28-4632-a3e8-4f54988f328b",
       "name": "Save corrections",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -274,7 +274,7 @@
           "queryReplacement": "={{ [ $json.before.id, $json.normalized.doc_type, $json.normalized.supplier_name, $json.normalized.supplier_vat_id, $json.normalized.supplier_country, $json.normalized.invoice_number, $json.normalized.invoice_date, $json.normalized.due_date, $json.normalized.currency, $json.normalized.po_number, $json.normalized.net_amount, $json.normalized.vat_rate, $json.normalized.vat_amount, $json.normalized.gross_amount, $json.normalized.related_invoice, JSON.stringify($json.reasons), JSON.stringify($json.warnings), 'pending_erp', $json.actor, 'approved', JSON.stringify((({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }) => ({ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }))($json.before)), JSON.stringify($json.normalized), 'Approved after review. All checks pass.' ] }}"
         }
       },
-      "id": "c22a003b-c0d2-4353-a781-5272085f07d7",
+      "id": "96db2beb-e7d8-4130-a7cc-57e0af101f85",
       "name": "Approve → pending booking",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -323,7 +323,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "f746f99a-3a59-4a99-a756-72e8831daad2",
+      "id": "a49a1936-c37b-4654-8bb4-7347b640fca4",
       "name": "Book in ERP",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -338,7 +338,7 @@
         "responseBody": "={{ JSON.stringify({ ok: true, status: $json.status, message: ({ booked: 'Booked in the ERP.', pending_erp: 'Approved. ERP is down right now; it will be booked automatically when it is back.', duplicate: 'ERP refused it: this invoice number is already booked.', needs_review: 'Saved.', rejected: 'Rejected.' })[$json.status] || $json.status }) }}",
         "options": {}
       },
-      "id": "4ed594a6-586f-4a34-8e78-dc9b2ca80956",
+      "id": "0a03ade1-0c0e-4b27-8365-578b4ee8d075",
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,

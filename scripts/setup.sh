@@ -12,6 +12,7 @@ TMP=$(mktemp -d)
 cat > "$TMP/creds.json" <<JSON
 [
  {"id":"IntakePostgres001","name":"Intake Postgres","type":"postgres","data":{"host":"${PG_HOST_FOR_N8N}","port":${PG_PORT_FOR_N8N},"database":"intake","user":"intake","password":"${POSTGRES_PASSWORD:-intake}","ssl":"disable","allowUnauthorizedCerts":false}},
+ {"id":"IntakeFormBasic01","name":"Super admin (form)","type":"httpBasicAuth","data":{"user":"${SUPER_ADMIN_USER:-superadmin}","password":"${SUPER_ADMIN_KEY}"}},
  {"id":"IntakeLlmOpenAi01","name":"LLM (OpenAI-compatible: Sarvam-105B)","type":"openAiApi","data":{"apiKey":"${SARVAM_API_KEY}","url":"${LLM_BASE_URL:-https://api.sarvam.ai/v1}","organizationId":"","header":false}}
 ]
 JSON
@@ -19,7 +20,6 @@ chmod 644 "$TMP/creds.json"
 docker cp "$TMP/creds.json" "$N8N_CONTAINER:/tmp/creds.json"
 docker exec "$N8N_CONTAINER" n8n import:credentials --input=/tmp/creds.json | grep -i success
 docker exec -u root "$N8N_CONTAINER" rm -f /tmp/creds.json; rm -rf "$TMP"
-docker exec intake-postgres psql -U intake -d intake -q -c "insert into app_settings (key, value) values ('super_admin_key', crypt('${SUPER_ADMIN_KEY}', gen_salt('bf'))) on conflict (key) do update set value = excluded.value, updated_at = now()"
 python3 scripts/import-workflows.py
 echo "→ n8n:    $N8N_URL"
 echo "→ review: http://localhost:3001"

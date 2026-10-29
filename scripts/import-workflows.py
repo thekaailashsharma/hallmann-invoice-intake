@@ -19,6 +19,8 @@ for f in sorted((ROOT / "workflows").glob("*.json")):
     for n in wf["nodes"]:
         t = NEEDS.get(n["type"])
         if t: n["credentials"] = {t[0]: {"id": t[1], "name": t[2]}}
+        if n["type"] == "n8n-nodes-base.formTrigger" and n["parameters"].get("authentication") == "basicAuth":
+            n["credentials"] = {"httpBasicAuth": {"id": "IntakeFormBasic01", "name": "Super admin (form)"}}
     bundle.append(wf)
 with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh: json.dump(bundle, fh); tmp = fh.name
 os.chmod(tmp, 0o644)

@@ -123,13 +123,10 @@ app.get('/api/users', authed(['admin']), wrap(async (_req, res) => res.json((awa
 app.post('/api/users', authed(['admin']), wrap(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase(), name = String(req.body.display_name || '').trim(), role = req.body.role;
   if (!/^[^@\s]+@[^@\s]+$/.test(email) || !name || !['clerk', 'lead', 'admin'].includes(role)) return res.status(400).json({ error: 'Email, name and role are required' });
-  let created = false;
-  if (canManageUsers) {
-    try { await admin.auth().getUserByEmail(email); } catch { await admin.auth().createUser({ email, displayName: name, password: require('crypto').randomBytes(24).toString('base64url') }); created = true; }
-  }
+  // Sign-in is Google only: no account to create here. Being in app_users is what grants access.
   await q(`insert into app_users (email, display_name, role, created_by) values ($1, $2, $3, $4) on conflict (email) do update set display_name = excluded.display_name, role = excluded.role, active = true`, [email, name, role, req.user.email]);
   await q(`insert into audit_log (actor, action, note) values ($1, 'user_upserted', $2)`, [req.user.display_name, `${email} as ${role}`]);
-  res.json({ ok: true, created, hint: created ? 'Account created. The person sets a password with "Forgot password" on the sign-in page.' : 'Role saved.' });
+  res.json({ ok: true, hint: 'Access granted. The person signs in with that Google account.' });
 }));
 app.patch('/api/users/:email', authed(['admin']), wrap(async (req, res) => {
   const { role, active } = req.body;

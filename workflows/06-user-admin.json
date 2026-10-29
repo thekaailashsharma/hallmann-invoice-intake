@@ -4,12 +4,12 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## User admin form\nSuper admin adds or removes people without touching the database. The passphrase is checked against a bcrypt hash in app_settings; every change is audited. Sign-in itself is Google via Firebase; this table decides who gets in and with which role.",
+        "content": "## User admin form\nSuper admin adds or removes people without touching the database. The form is protected by n8n Basic Auth (credential \"Super admin (form)\"); every change is audited. Sign-in itself is Google via Firebase; this table decides who gets in and with which role.",
         "height": 150,
         "width": 760,
         "color": 5
       },
-      "id": "544c1f95-856a-4114-9a13-96baa62e4b21",
+      "id": "e0a0ab5c-267c-42bd-8a9b-dd78ee9f9342",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -21,7 +21,7 @@
     {
       "parameters": {
         "formTitle": "Hallmann invoice intake · user admin",
-        "formDescription": "Add a person (they sign in with Google) or remove access. Super admin passphrase required.",
+        "formDescription": "Add a person (they sign in with Google) or remove access.",
         "formFields": {
           "values": [
             {
@@ -68,20 +68,15 @@
                   }
                 ]
               }
-            },
-            {
-              "fieldLabel": "Super admin passphrase",
-              "fieldName": "passphrase",
-              "fieldType": "password",
-              "requiredField": true
             }
           ]
         },
+        "authentication": "basicAuth",
         "options": {
           "buttonLabel": "Apply"
         }
       },
-      "id": "220154f0-e15a-4308-a4a9-faa401ea149a",
+      "id": "852e7f8e-dc6d-4be4-9530-c9aec9f1eea7",
       "name": "User form",
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.5,
@@ -93,24 +88,6 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "select (crypt($1, value) = value) as ok from app_settings where key = 'super_admin_key'",
-        "options": {
-          "queryReplacement": "={{ [ String($json.passphrase || '') ] }}"
-        }
-      },
-      "id": "2adef786-5363-486d-a26f-dbb03d8b440d",
-      "name": "Check passphrase",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.8,
-      "position": [
-        -120,
-        0
-      ],
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -120,58 +97,7 @@
           },
           "conditions": [
             {
-              "id": "49ac107f-4ae2-49a2-bedf-e6c4afd53f9b",
-              "leftValue": "={{ $json.ok === true }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "279aa41c-1a51-4aa9-9fed-3da3f4189ba1",
-      "name": "Passphrase ok?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.4,
-      "position": [
-        120,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "completion",
-        "respondWith": "text",
-        "completionTitle": "Not applied",
-        "completionMessage": "Wrong super admin passphrase. Nothing was changed.",
-        "options": {}
-      },
-      "id": "806de4ef-7789-4f6f-afbd-9cdd5b7dc0b4",
-      "name": "Refused",
-      "type": "n8n-nodes-base.form",
-      "typeVersion": 2.5,
-      "position": [
-        360,
-        160
-      ],
-      "webhookId": "7d3b0a7e-users-00002"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 4
-          },
-          "conditions": [
-            {
-              "id": "84df0e3f-2791-45a5-8965-0374b969c1a1",
+              "id": "d0fcbdb8-d288-4cce-aa0e-6ece5b4c292c",
               "leftValue": "={{ $('User form').item.json.action }}",
               "rightValue": "add",
               "operator": {
@@ -184,13 +110,13 @@
         },
         "options": {}
       },
-      "id": "b5ff8570-7ee1-49ae-aa76-5986040013bd",
+      "id": "e7d87226-c4bd-47bb-8752-eecb13298cd0",
       "name": "Add?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
       "position": [
-        360,
-        -120
+        -120,
+        0
       ]
     },
     {
@@ -201,7 +127,7 @@
           "queryReplacement": "={{ [ $('User form').item.json.email, $('User form').item.json.name || '', $('User form').item.json.role || '' ] }}"
         }
       },
-      "id": "00b0d56c-3ef2-452d-b0a1-9b663f82bbb6",
+      "id": "cc7fe83b-43d4-4864-93e5-dc319abd9647",
       "name": "Add / update user",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -218,7 +144,7 @@
           "queryReplacement": "={{ [ $('User form').item.json.email ] }}"
         }
       },
-      "id": "d42339e4-c0a5-4a79-b254-9ec71ad18510",
+      "id": "4cf2a044-5556-4c88-b7ff-8ead36020def",
       "name": "Remove user",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -235,7 +161,7 @@
         "completionMessage": "={{ $json.note || 'No such user.' }} — the person can now sign in with Google (or no longer can).",
         "options": {}
       },
-      "id": "3ce295a2-6c25-4e2e-a497-0d891e73e60f",
+      "id": "48b9fd38-4932-4dbe-8cfa-fab133f14f0f",
       "name": "Done",
       "type": "n8n-nodes-base.form",
       "typeVersion": 2.5,
@@ -251,36 +177,7 @@
       "main": [
         [
           {
-            "node": "Check passphrase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check passphrase": {
-      "main": [
-        [
-          {
-            "node": "Passphrase ok?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Passphrase ok?": {
-      "main": [
-        [
-          {
             "node": "Add?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Refused",
             "type": "main",
             "index": 0
           }

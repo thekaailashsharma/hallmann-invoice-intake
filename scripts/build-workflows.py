@@ -271,23 +271,16 @@ E.dump("05-error-handler.json")
 
 # ═══════════════════════════════════ F · USER ADMIN (n8n form) ═══════════════════════════════════
 F = WF("User Admin", IDS["users"], {"errorWorkflow": IDS["errors"]})
-F.sticky("## User admin form\nSuper admin adds or removes people without touching the database. The passphrase is checked against a bcrypt hash in app_settings; every change is audited. Sign-in itself is Google via Firebase; this table decides who gets in and with which role.", -400, -220, 760, 150, 5)
-uf = F.node("User form", "n8n-nodes-base.formTrigger", 2.5, {"formTitle": "Hallmann invoice intake · user admin", "formDescription": "Add a person (they sign in with Google) or remove access. Super admin passphrase required.",
+F.sticky("## User admin form\nSuper admin adds or removes people without touching the database. The form is protected by n8n Basic Auth (credential \"Super admin (form)\"); every change is audited. Sign-in itself is Google via Firebase; this table decides who gets in and with which role.", -400, -220, 760, 150, 5)
+uf = F.node("User form", "n8n-nodes-base.formTrigger", 2.5, {"formTitle": "Hallmann invoice intake · user admin", "formDescription": "Add a person (they sign in with Google) or remove access.",
     "formFields": {"values": [
         {"fieldLabel": "Action", "fieldName": "action", "fieldType": "dropdown", "fieldOptions": {"values": [{"option": "add"}, {"option": "remove"}]}, "requiredField": True},
         {"fieldLabel": "Email (Google account)", "fieldName": "email", "fieldType": "email", "requiredField": True},
         {"fieldLabel": "Name", "fieldName": "name", "placeholder": "needed for add"},
-        {"fieldLabel": "Role", "fieldName": "role", "fieldType": "dropdown", "fieldOptions": {"values": [{"option": "clerk"}, {"option": "lead"}, {"option": "admin"}]}},
-        {"fieldLabel": "Super admin passphrase", "fieldName": "passphrase", "fieldType": "password", "requiredField": True}]},
-    "options": {"buttonLabel": "Apply"}}, -360, 0, webhookId="7d3b0a7e-users-00001")
-chk = F.pg("Check passphrase", "select (crypt($1, value) = value) as ok from app_settings where key = 'super_admin_key'", "[ String($json.passphrase || '') ]", -120, 0, alwaysOutputData=True)
-F.link(uf, chk)
-okp = if_node(F, "Passphrase ok?", "={{ $json.ok === true }}", "true", True, 120, 0)
-F.link(chk, okp)
-F.node("Refused", "n8n-nodes-base.form", 2.5, {"operation": "completion", "respondWith": "text", "completionTitle": "Not applied", "completionMessage": "Wrong super admin passphrase. Nothing was changed.", "options": {}}, 360, 160, webhookId="7d3b0a7e-users-00002")
-F.link(okp, "Refused", 1)
-isadd = if_node(F, "Add?", "={{ $('User form').item.json.action }}", "equals", "add", 360, -120, "string")
-F.link(okp, isadd, 0)
+        {"fieldLabel": "Role", "fieldName": "role", "fieldType": "dropdown", "fieldOptions": {"values": [{"option": "clerk"}, {"option": "lead"}, {"option": "admin"}]}}]},
+    "authentication": "basicAuth", "options": {"buttonLabel": "Apply"}}, -360, 0, webhookId="7d3b0a7e-users-00001")
+isadd = if_node(F, "Add?", "={{ $('User form').item.json.action }}", "equals", "add", -120, 0, "string")
+F.link(uf, isadd)
 F.pg("Add / update user", "with u as (insert into app_users (email, display_name, role, active, created_by) values (lower($1), coalesce(nullif($2, ''), split_part($1, '@', 1)), coalesce(nullif($3, ''), 'clerk')::user_role, true, 'n8n form') on conflict (email) do update set display_name = coalesce(nullif($2, ''), app_users.display_name), role = coalesce(nullif($3, ''), app_users.role::text)::user_role, active = true returning email, display_name, role) insert into audit_log (actor, action, note) select 'super admin (form)', 'user_upserted', u.email || ' as ' || u.role from u returning note",
      "[ $('User form').item.json.email, $('User form').item.json.name || '', $('User form').item.json.role || '' ]", 600, -200)
 F.pg("Remove user", "with u as (update app_users set active = false where email = lower($1) returning email) insert into audit_log (actor, action, note) select 'super admin (form)', 'user_removed', u.email from u returning note", "[ $('User form').item.json.email ]", 600, -40)
