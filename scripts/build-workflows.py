@@ -38,8 +38,57 @@ class WF:
     def llm(self, name, x, y):
         return self.node(name, "@n8n/n8n-nodes-langchain.lmChatOpenAi", 1.2, {"model": {"__rl": True, "mode": "id", "value": LLM_MODEL}, "options": {"temperature": 0, "maxTokens": 6000, "timeout": 90000, "maxRetries": 2}}, x, y)
     def dump(self, fn):
+        self.decorate()
         wf = {"id": self.id, "name": self.name, "nodes": self.nodes, "connections": self.conn, "settings": self.settings, "pinData": {}, "meta": {"templateCredsSetupCompleted": False}, "tags": []}
         (ROOT / "workflows" / fn).write_text(json.dumps(wf, indent=2, ensure_ascii=False) + "\n"); print("wrote", fn, len(self.nodes), "nodes")
+
+# ── look: wider spacing, one animated banner per workflow, a small picture label per section, very little text ──
+IMG = "/static/hallmann"
+LOOK = {
+  "Invoice Intake": ("intake.gif", "Invoice intake", "Fetch → store → label → hand over. Nothing can be lost.", [
+     ("Mailbox", "mail", "IMAP or Gmail", ["Invoice mailbox (IMAP)", "Invoice mailbox (Gmail)"]),
+     ("Store first", "db", "email + files in Postgres", ["Parse email", "Store email", "Store attachment files"]),
+     ("Done-marker", "label", "Gmail label 'Processed'", ["From Gmail?", "Gmail: labels", "Processed label", "Gmail: mark Processed"]),
+     ("Hand over", "handoff", "one run per email", ["Hand over (with attachments)", "Process each email"])]),
+  "Process Email": ("process.gif", "Process one email", "The AI reads. The rules decide.", [
+     ("Read", "pdf", "every PDF + XML", ["Email in", "Split PDFs", "PDF?", "Read PDF", "Name the text", "Combine PDF texts", "No PDFs"]),
+     ("One per document", "loop", "skip what is saved", ["Prepare documents", "One document at a time", "Next document"]),
+     ("Guardrails", "shield", "injection / jailbreak", ["Guardrails", "Flag: guardrail tripped"]),
+     ("AI reads", "ai", "7 types · fields", ["Classify", "Extract", "Sarvam-105B"]),
+     ("Not payable", "stop", "proforma · order · statement", ["Proforma / quote", "Order confirmation", "Statement of account", "AI could not read"]),
+     ("Rules decide", "rules", "unit-tested, no AI", ["Supplier + earlier invoices", "Validate"]),
+     ("Save + book", "erp", "only clean invoices", ["Save document", "Book now?", "Book in ERP"]),
+     ("After the loop", "mail", "not-an-invoice · minimise", ["Record not-an-invoice", "Keep only what is needed"])]),
+  "ERP Booking": ("erp.gif", "ERP booking", "Real-time API. Never twice. Waits when the ERP is down.", [
+     ("Ways in", "clock", "now or every 5 min", ["Book now (called)", "Every 5 minutes", "Run now", "Waiting bookings"]),
+     ("Book once", "erp", "lock · send · read answer", ["Claim document", "Send to ERP", "Read ERP answer", "Record result", "What next?"]),
+     ("Tell Avanai", "bell", "one alert per problem", ["Alert", "New alert?", "E-mail Avanai on-call", "Close ERP-down alert"])]),
+  "Review Decision": ("review.gif", "Review decision", "Same rules as the intake. Every change audited.", [
+     ("Check", "person", "key · role · rules", ["Decision in", "Load document + user", "Check decision", "Accepted?", "Refuse"]),
+     ("Apply", "rules", "save · reject · approve", ["Which action?", "Approve → ready to book", "Save corrections", "Mark rejected", "Reopen"]),
+     ("Book + answer", "erp", "ERP result to screen", ["Book in ERP", "Status after booking", "Respond", "Respond: error"])]),
+  "Monitoring": ("monitoring.gif", "Monitoring", "Sabine hears it from Avanai, not from a supplier.", [
+     ("Something failed", "bell", "any workflow", ["Workflow failed", "Record failure"]),
+     ("Watchdog", "clock", "every 15 minutes", ["Every 15 minutes", "Run now", "Unfinished emails", "Re-run Process Email", "Health checks", "Raise alert"]),
+     ("E-mail on-call", "mail", "new alerts only", ["New alert?", "E-mail Avanai on-call"])]),
+}
+SX, SY = 1.45, 1.6
+def _decorate(self):
+    look = LOOK.get(self.name)
+    if not look: return
+    self.nodes = [n for n in self.nodes if n["type"] != "n8n-nodes-base.stickyNote"]
+    for n in self.nodes: n["position"] = [round(n["position"][0] * SX), round(n["position"][1] * SY)]
+    pos = {n["name"]: n["position"] for n in self.nodes}
+    gif, title, line, groups = look
+    mx, my = min(p[0] for p in pos.values()), min(p[1] for p in pos.values())
+    tops = [my]
+    for gname, ic, desc, names in groups:
+        pts = [pos[n] for n in names if n in pos]
+        if not pts: continue
+        x, y = min(p[0] for p in pts), min(p[1] for p in pts)
+        self.sticky(f"![]({IMG}/{ic}.png)\n**{gname}**  \n{desc}", x - 40, y - 250, 260, 210, 5); tops.append(y - 250)
+    self.sticky(f"![]({IMG}/{gif})\n## {title}\n{line}", mx - 60, min(tops) - 400, 800, 340, 7)
+WF.decorate = _decorate
 
 def if_node(wf, name, left, op, right, x, y, type_="boolean"):
     return wf.node(name, "n8n-nodes-base.if", 2.4, {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 4},

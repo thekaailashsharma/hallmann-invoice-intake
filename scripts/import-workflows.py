@@ -25,6 +25,9 @@ def cp_in(obj, dest):
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh: json.dump(obj, fh); tmp = fh.name
     os.chmod(tmp, 0o644); subprocess.run(["docker", "cp", tmp, f"{N8N}:{dest}"], check=True); os.unlink(tmp)
 
+# Sticky-note pictures: served by n8n at /static/hallmann/ (the bundled compose mounts the folder; here they are copied in).
+subprocess.run(["docker", "exec", "-u", "root", N8N, "mkdir", "-p", "/usr/local/lib/node_modules/n8n/node_modules/n8n-editor-ui/dist/static/hallmann"], capture_output=True)
+for f in (ROOT / "n8n-assets").glob("*"): subprocess.run(["docker", "cp", str(f), f"{N8N}:/usr/local/lib/node_modules/n8n/node_modules/n8n-editor-ui/dist/static/hallmann/{f.name}"], capture_output=True)
 cp_in([{"id": i, "name": n, "type": CTYPE.get(k, k), "data": d} for k, (i, n, d) in CREDS.items()], "/tmp/creds.json")
 print("credentials:", (dx(N8N, "n8n", "import:credentials", "--input=/tmp/creds.json").stdout.strip().splitlines() or ["?"])[-1])
 dx("-u", "root", N8N, "rm", "-f", "/tmp/creds.json")

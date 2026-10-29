@@ -48,6 +48,7 @@ services:
     volumes:
       - n8n_data:/home/node/.n8n
       - ./fixtures:/data:ro
+      - ./n8n-assets:/usr/local/lib/node_modules/n8n/node_modules/n8n-editor-ui/dist/static/hallmann:ro
     restart: unless-stopped
 
   erp:
