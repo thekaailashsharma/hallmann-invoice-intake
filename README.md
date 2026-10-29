@@ -44,5 +44,4 @@ python3 scripts/send-emails.py
 
 - I used Claude Code & n8n MCP with Claude to write most of the code and tests; the decisions and the testing are mine.
 
-Best
-~ Kailash
+Best, Kailash
