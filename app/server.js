@@ -57,7 +57,7 @@ const auth = (roles) => async (req, res, next) => { try {
   req.user = u; next();
 } catch (e) { console.error(e); res.status(500).json({ error: 'Server error', detail: e.message }); } };
 const authed = auth;
-app.get('/api/me', authed(), (req, res) => res.json(req.user));
+app.get('/api/me', authed(), (req, res) => res.json({ ...req.user, owner: req.user.email === (process.env.INITIAL_ADMIN_EMAIL || '').trim().toLowerCase() }));
 
 // ── overview + lists ──
 app.get('/api/overview', authed(), wrap(async (_req, res) => {
@@ -166,12 +166,15 @@ app.get('/api/audit', authed(['lead', 'admin']), wrap(async (req, res) => {
 app.post('/api/alerts/:id/ack', authed(['lead', 'admin']), wrap(async (req, res) => { await q(`update alerts set acknowledged = true where id = $1`, [req.params.id]); res.json({ ok: true }); }));
 
 // ── user management (admin) ──
-app.get('/api/users', authed(['admin']), wrap(async (_req, res) => res.json((await q(`select email, display_name, role, active, created_at from app_users order by created_at`)).rows)));
+// The owner (INITIAL_ADMIN_EMAIL) is always an active admin: nobody, including other admins, can demote or deactivate it.
+const OWNER = (process.env.INITIAL_ADMIN_EMAIL || '').trim().toLowerCase();
+app.get('/api/users', authed(['admin']), wrap(async (_req, res) => res.json((await q(`select email, display_name, role, active, created_at, email = $1 as owner from app_users order by (email = $1) desc, created_at`, [OWNER])).rows)));
 app.post('/api/users', authed(['admin']), wrap(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase(), name = String(req.body.display_name || '').trim(), role = req.body.role;
   if (!/^[^@\s]+@[^@\s]+$/.test(email) || !name || !['clerk', 'lead', 'admin'].includes(role)) return res.status(400).json({ error: 'Email, name and role are required' });
   // Optional company restriction: if ALLOWED_EMAIL_DOMAINS is set, admins can only add people from those domains.
   if (ALLOWED_DOMAINS.length && !ALLOWED_DOMAINS.includes(email.split('@')[1])) return res.status(400).json({ error: `${email} is not from an allowed company domain (${ALLOWED_DOMAINS.join(', ')})` });
+  if (email === OWNER) return res.status(403).json({ error: 'The owner account always stays an active admin.' });
   // Sign-in is Google only: no account to create here. Being in app_users is what grants access.
   await q(`insert into app_users (email, display_name, role, created_by) values ($1, $2, $3, $4) on conflict (email) do update set display_name = excluded.display_name, role = excluded.role, active = true`, [email, name, role, req.user.email]);
   await q(`insert into audit_log (actor, action, note) values ($1, 'user_upserted', $2)`, [req.user.display_name, `${email} as ${role}`]);
@@ -179,6 +182,7 @@ app.post('/api/users', authed(['admin']), wrap(async (req, res) => {
 }));
 app.patch('/api/users/:email', authed(['admin']), wrap(async (req, res) => {
   const { role, active } = req.body;
+  if (req.params.email.toLowerCase() === OWNER) return res.status(403).json({ error: 'The owner account always stays an active admin.' });
   await q(`update app_users set role = coalesce($2::user_role, role), active = coalesce($3, active) where email = $1`, [req.params.email.toLowerCase(), role || null, typeof active === 'boolean' ? active : null]);
   await q(`insert into audit_log (actor, action, note) values ($1, 'user_updated', $2)`, [req.user.display_name, `${req.params.email}: ${JSON.stringify(req.body)}`]);
   res.json({ ok: true });
