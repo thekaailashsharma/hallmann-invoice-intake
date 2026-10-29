@@ -8,8 +8,8 @@ const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
 const load = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
 const validator = fs.readFileSync(path.join(__dirname, '..', 'shared', 'validate.js'), 'utf8');
 
-test('five workflows export with stable ids', () => {
-  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-erp-retry.json', '04-review-decision.json', '05-error-handler.json']);
+test('four workflows export with stable ids', () => {
+  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-review-decision.json', '04-monitoring.json']);
   for (const f of files) assert.match(load(f).id, /^Inv[A-Za-z0-9]{14}$/);
 });
 
@@ -24,12 +24,12 @@ test('every connection targets an existing node', () => {
 });
 
 test('all operational workflows route failures to the error handler', () => {
-  for (const f of files.filter((x) => !x.includes('error-handler'))) assert.equal(load(f).settings.errorWorkflow, 'InvErrorHandler01', f);
+  for (const f of files.filter((x) => !x.includes('monitoring'))) assert.equal(load(f).settings.errorWorkflow, 'InvErrorHandler01', f);
 });
 
 test('the validator embedded in n8n is byte-identical to shared/validate.js (and to the app copy)', () => {
   const core = validator.split("if (typeof module !== 'undefined')")[0];
-  for (const f of ['01-invoice-intake.json', '04-review-decision.json']) {
+  for (const f of ['01-invoice-intake.json', '03-review-decision.json']) {
     const code = load(f).nodes.find((n) => n.type === 'n8n-nodes-base.code' && /validateInvoice\(/.test(n.parameters.jsCode)).parameters.jsCode;
     assert.ok(code.startsWith(core), `${f}: Validate node drifted from shared/validate.js (run npm run build)`);
   }
@@ -53,5 +53,12 @@ test('no credentials or secrets in the exports', () => {
     const raw = fs.readFileSync(path.join(dir, f), 'utf8');
     assert.doesNotMatch(raw, /sk_[A-Za-z0-9]{10,}|"password"\s*:/);
     for (const n of load(f).nodes) assert.equal(n.credentials, undefined, `${f}: ${n.name}`);
+  }
+});
+
+test('webhooks require the shared key; AI and database steps retry', () => {
+  for (const f of files) for (const n of load(f).nodes) {
+    if (n.type === 'n8n-nodes-base.webhook') assert.equal(n.parameters.authentication, 'headerAuth', `${f}: ${n.name} is unauthenticated`);
+    if (/textClassifier|informationExtractor|postgres$/.test(n.type)) assert.ok(n.retryOnFail, `${f}: ${n.name} has no retry`);
   }
 });
