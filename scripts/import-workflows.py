@@ -26,8 +26,10 @@ subprocess.run(["docker", "cp", tmp, f"{N8N}:/tmp/wfs.json"], check=True)
 out = dx(N8N, "n8n", "import:workflow", "--input=/tmp/wfs.json")
 print([l for l in out.stdout.splitlines() if "import" in l.lower()][-1] if out.stdout else out.stderr[-500:])
 for wid in ACTIVATE:
-    r = dx(N8N, "n8n", "update:workflow", f"--id={wid}", "--active=true")
-    print(f"activate {wid}:", (r.stdout.strip().splitlines() or [r.stderr.strip()[-200:]])[-1])
+    # n8n 2.x: import writes the draft; publish makes it the live version (and activates triggers)
+    r = dx(N8N, "n8n", "publish:workflow", f"--id={wid}")
+    line = [l for l in (r.stdout + r.stderr).splitlines() if l.strip() and "license" not in l.lower() and "python" not in l.lower()]
+    print(f"publish {wid}:", (line or ["?"])[-1][:120])
 subprocess.run(["docker", "restart", N8N], check=True, capture_output=True)
 for _ in range(90):
     try:

@@ -1,9 +1,9 @@
 {
   "name": "invoice-review",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "Review screen for the invoice intake: what is open, why, correct it, send it on.",
+  "description": "Review screen for the invoice intake: what is open, why, correct it, send it on. Firebase Auth + roles.",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
-  "dependencies": { "express": "^4.21.2", "pg": "^8.13.1" }
+  "dependencies": { "express": "^4.21.2", "pg": "^8.13.1", "firebase-admin": "^13.0.2", "helmet": "^8.0.0", "express-rate-limit": "^7.5.0" }
 }

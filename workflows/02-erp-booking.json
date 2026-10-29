@@ -9,7 +9,7 @@
         "width": 760,
         "color": 4
       },
-      "id": "d86fc9ab-6892-4bd2-a542-c0d381f93945",
+      "id": "ac241c8f-44c5-4288-a236-6dd077371465",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -34,7 +34,7 @@
           ]
         }
       },
-      "id": "fa9af8be-4c04-425a-90c0-ec49c315dc98",
+      "id": "4302716e-5fdb-4c6d-8ab1-1e57cc241cc0",
       "name": "Called with document_id",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -51,7 +51,7 @@
           "queryReplacement": "={{ [ $json.document_id, $json.actor || 'system' ] }}"
         }
       },
-      "id": "2cd7563a-61bc-46be-a32d-69a0818e4c02",
+      "id": "30d3518f-8d2e-4de2-ae81-e6b301c3a105",
       "name": "Load document + ERP status",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -71,7 +71,7 @@
           },
           "conditions": [
             {
-              "id": "26182c8b-9797-4a8b-ba58-3b713d4b872c",
+              "id": "4ecf1f5d-5f0b-4539-a92e-6dc31c8633ed",
               "leftValue": "={{ $json.erp_available }}",
               "rightValue": true,
               "operator": {
@@ -84,7 +84,7 @@
         },
         "options": {}
       },
-      "id": "e03b0471-0d90-4ce3-8f1f-f69a2170ed83",
+      "id": "408a42bc-698b-41eb-a123-e4afcbcc72ef",
       "name": "ERP available?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -101,7 +101,7 @@
           "queryReplacement": "={{ [ $json.id, $json.actor ] }}"
         }
       },
-      "id": "b5b71378-f9db-428a-a41f-883ea8f85c2b",
+      "id": "682277ca-5ac1-49ff-b9b8-8e81d42b5dc5",
       "name": "Book (unique per supplier + number)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -122,7 +122,7 @@
           "queryReplacement": "={{ [ $json.id, $json.actor ] }}"
         }
       },
-      "id": "2fd1a263-1a1b-44d0-943d-20fcc77f7e69",
+      "id": "1877c98e-81df-4021-95b7-f920489177ae",
       "name": "Queue: ERP down",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -139,7 +139,7 @@
           "queryReplacement": "={{ [ $('ERP available?').item.json.id, String($json.error && $json.error.message || $json.error || 'unknown error') ] }}"
         }
       },
-      "id": "ace9d8f7-139c-4971-a3c9-0196af59414f",
+      "id": "bd2d1689-58f5-4748-8fc6-15666bf21a5c",
       "name": "Alert: booking failed",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,

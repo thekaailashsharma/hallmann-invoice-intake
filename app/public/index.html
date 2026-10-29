@@ -1,55 +1,59 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Invoice intake · Hallmann</title>
+<title>Hallmann · Invoices</title>
+<link rel="icon" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --ink:#1c1c1e; --ink-2:#4b4b50; --muted:#8b8b90; --line:#e8e5dc; --bg:#eceae4; --panel:#f6f4ee; --card:#ffffff; --yellow:#f7d44c; --yellow-soft:#fbf1c0; --green:#2f8a4c; --green-soft:#e7f3ea; --red:#c43d2f; --red-soft:#fbe9e6; --blue:#2d6be5; --blue-soft:#e7eefc; --r:24px; --r-s:14px; }
-  * { box-sizing:border-box } html, body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight:400 }
+  :root { --ink:#1c1c1e; --ink-2:#4b4b50; --muted:#8b8b90; --line:#e8e5dc; --bg:#eceae4; --panel:#f6f4ee; --card:#fff; --yellow:#f7d44c; --yellow-soft:#fbf1c0; --green:#2f8a4c; --green-soft:#e7f3ea; --red:#c43d2f; --red-soft:#fbe9e6; --blue:#2d6be5; --blue-soft:#e7eefc; --r:24px; --r-s:14px }
+  * { box-sizing:border-box } html, body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif }
+  a { color:var(--ink) } button, input, select { font:inherit } :focus-visible { outline:2px solid var(--ink); outline-offset:2px; border-radius:6px }
   .shell { max-width:1360px; margin:28px auto; background:var(--panel); border-radius:32px; padding:28px 36px 40px; min-height:calc(100vh - 56px); box-shadow:0 30px 80px rgba(0,0,0,.08) }
-  .top { display:flex; align-items:center; gap:14px } .brand { font-size:20px; font-weight:500; padding:10px 20px; border:1px solid var(--line); border-radius:999px; background:var(--card) }
+  .top { display:flex; align-items:center; gap:14px; flex-wrap:wrap } .logo { display:flex; align-items:center } .logo img { height:36px }
   .nav { display:flex; gap:2px; margin-left:auto; background:var(--card); border-radius:999px; padding:4px; border:1px solid var(--line) }
-  .nav a { padding:9px 16px; border-radius:999px; color:var(--ink-2); text-decoration:none; font-size:14px; white-space:nowrap } .nav a.active { background:var(--ink); color:#fff }
-  .nav a b { font-weight:500; margin-left:6px; opacity:.6 } .nav a.active b { opacity:.8 }
-  .who { display:flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 8px 6px 14px; font-size:14px; color:var(--ink-2) }
-  .who select { font:inherit; border:0; background:transparent; color:var(--ink); font-weight:500 }
-  .hero { display:flex; align-items:flex-end; gap:40px; margin:38px 0 26px } .hero h1 { font-size:44px; font-weight:300; margin:0; letter-spacing:-.5px; line-height:1.05 } .hero h1 b { font-weight:500 }
-  .stats { display:flex; gap:36px; margin-left:auto } .stat { text-align:left } .stat .n { font-size:44px; font-weight:300; line-height:1 } .stat .l { color:var(--muted); font-size:13px; margin-top:4px }
-  .erp { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; background:var(--card); border:1px solid var(--line); font-size:13px; color:var(--ink-2); cursor:pointer } .erp i { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block } .erp.down i { background:var(--red) }
+  .nav a { padding:9px 16px; border-radius:999px; color:var(--ink-2); text-decoration:none; font-size:14px; white-space:nowrap } .nav a.active { background:var(--ink); color:#fff } .nav a b { font-weight:500; margin-left:6px; opacity:.6 }
+  .me { display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:999px; padding:6px 8px 6px 14px; font-size:14px } .me .r { color:var(--muted) } .me button, .lang { border:0; background:transparent; color:var(--ink-2); cursor:pointer; padding:4px 8px; border-radius:999px } .me button:hover, .lang:hover { background:#f0eee7 }
+  .hero { display:flex; align-items:flex-end; gap:40px; margin:38px 0 26px; flex-wrap:wrap } .hero h1 { font-size:42px; font-weight:300; margin:0; letter-spacing:-.5px; line-height:1.05 } .hero h1 b { font-weight:500 } .hero .sub { color:var(--muted); margin-top:8px; font-size:14px }
+  .stats { display:flex; gap:36px; margin-left:auto; align-items:flex-end } .stat .n { font-size:42px; font-weight:300; line-height:1 } .stat .l { color:var(--muted); font-size:13px; margin-top:4px }
+  .erp { display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:999px; background:var(--card); border:1px solid var(--line); font-size:13px; color:var(--ink-2) } .erp i { width:8px; height:8px; border-radius:50%; background:var(--green) } .erp.down { color:var(--red) } .erp.down i { background:var(--red) }
   .card { background:var(--card); border-radius:var(--r); padding:22px 24px } .card h2 { margin:0 0 14px; font-size:17px; font-weight:500; display:flex; align-items:center; gap:10px } .card h2 .sub { color:var(--muted); font-weight:400; font-size:13px }
-  table { width:100%; border-collapse:collapse } th { text-align:left; font-size:12px; color:var(--muted); font-weight:500; padding:4px 12px 12px } td { padding:14px 12px; border-top:1px solid var(--line); vertical-align:top }
-  tr.row { cursor:pointer } tr.row:hover td { background:#fbfaf6 } td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:500 } .dim { color:var(--muted); font-size:13px; font-weight:400 }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px } .filters input, .filters select { padding:9px 12px; border:1px solid var(--line); border-radius:999px; background:#fff } .filters input[type=search] { min-width:260px } .filters label { color:var(--muted); font-size:13px; display:flex; gap:6px; align-items:center }
+  table { width:100%; border-collapse:collapse } th { text-align:left; font-size:12px; color:var(--muted); font-weight:500; padding:4px 12px 12px; cursor:pointer; user-select:none } td { padding:14px 12px; border-top:1px solid var(--line); vertical-align:top }
+  tr.row { cursor:pointer } tr.row:hover td { background:#fbfaf6 } td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap } td.num { font-weight:500 } .dim { color:var(--muted); font-size:13px; font-weight:400 }
   .pill { display:inline-block; padding:4px 11px; border-radius:999px; font-size:12px; font-weight:500; background:#efede6; color:var(--ink-2); white-space:nowrap }
-  .pill.needs_review { background:var(--yellow-soft); color:#7a5a00 } .pill.booked { background:var(--green-soft); color:var(--green) } .pill.pending_erp { background:var(--blue-soft); color:var(--blue) } .pill.rejected, .pill.duplicate { background:var(--red-soft); color:var(--red) } .pill.ignored { background:#efede6; color:var(--muted) }
+  .pill.needs_review { background:var(--yellow-soft); color:#7a5a00 } .pill.booked { background:var(--green-soft); color:var(--green) } .pill.pending_erp { background:var(--blue-soft); color:var(--blue) } .pill.rejected, .pill.duplicate { background:var(--red-soft); color:var(--red) } .pill.ignored { color:var(--muted) }
   .why { color:var(--ink-2); font-size:14px } .why .flag { color:var(--red); font-weight:500 } .why .w { color:var(--muted); font-size:13px }
-  .empty { padding:60px; text-align:center; color:var(--muted) }
-  .back { display:inline-block; margin-bottom:16px; color:var(--ink-2); text-decoration:none; font-size:14px } .back:hover { color:var(--ink) }
-  .split { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start } @media (max-width:980px) { .split { grid-template-columns:1fr } .hero { flex-wrap:wrap } .stats { margin-left:0 } }
-  pre.mail { white-space:pre-wrap; font:13.5px/1.6 "Outfit", sans-serif; color:var(--ink-2); margin:0; max-height:68vh; overflow:auto; padding-right:6px }
-  .meta { display:flex; gap:14px; color:var(--muted); font-size:13px; margin-bottom:14px; flex-wrap:wrap }
+  .empty { padding:60px; text-align:center; color:var(--muted) } .skeleton td div { height:14px; background:#f0eee7; border-radius:6px; animation:sh 1.2s infinite } @keyframes sh { 50% { opacity:.5 } }
+  .pager { display:flex; justify-content:space-between; align-items:center; margin-top:14px; color:var(--muted); font-size:13px } .pager button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:7px 14px; cursor:pointer } .pager button:disabled { opacity:.4; cursor:default }
+  .back { display:inline-block; margin-bottom:16px; color:var(--ink-2); text-decoration:none; font-size:14px }
+  .split { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start } @media (max-width:980px) { .split { grid-template-columns:1fr } .stats { margin-left:0 } }
+  pre.mail { white-space:pre-wrap; font:13.5px/1.6 "Outfit", sans-serif; color:var(--ink-2); margin:0; max-height:68vh; overflow:auto } .meta { display:flex; gap:14px; color:var(--muted); font-size:13px; margin-bottom:14px; flex-wrap:wrap }
   .field { display:grid; grid-template-columns:140px 1fr; gap:10px; align-items:center; padding:7px 0; border-top:1px solid var(--line) } .field:first-of-type { border-top:0 } .field label { color:var(--muted); font-size:13px }
-  .field input, .field select { font:inherit; padding:8px 10px; border:1px solid transparent; border-radius:10px; background:#f6f4ee; width:100%; color:var(--ink) } .field input:focus, .field select:focus { outline:0; border-color:var(--ink); background:#fff } .field input:disabled, .field select:disabled { background:transparent; color:var(--ink) }
-  .check { margin-top:16px; padding:16px 18px; border-radius:var(--r-s); background:var(--ink); color:#fff; font-size:14px; line-height:1.55 } .check.ok { background:var(--green) } .check small { opacity:.75 }
-  .actions { display:flex; gap:10px; margin-top:16px } .btn { font:inherit; font-weight:500; padding:11px 18px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer } .btn.primary { background:var(--yellow); border-color:var(--yellow) } .btn.quiet { color:var(--red) } .btn:disabled { opacity:.4; cursor:not-allowed }
+  .field input, .field select { padding:8px 10px; border:1px solid transparent; border-radius:10px; background:#f6f4ee; width:100%; color:var(--ink) } .field input:focus, .field select:focus { outline:0; border-color:var(--ink); background:#fff } .field input:disabled, .field select:disabled { background:transparent; color:var(--ink) }
+  .items { width:100%; font-size:13px; margin-top:6px } .items td { padding:6px 8px; border-top:1px solid var(--line) }
+  .check { margin-top:16px; padding:16px 18px; border-radius:var(--r-s); background:var(--ink); color:#fff; font-size:14px; line-height:1.55 } .check.ok { background:var(--green) } .check small { opacity:.75 } .check.warn { background:#8a6a00 }
+  .actions { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; align-items:center } .btn { font-weight:500; padding:11px 18px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer } .btn.primary { background:var(--yellow); border-color:var(--yellow) } .btn.quiet { color:var(--red) } .btn.dark { background:var(--ink); color:#fff; border-color:var(--ink) } .btn:disabled { opacity:.4; cursor:not-allowed }
+  .inline { margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap } .inline input { flex:1; min-width:220px; padding:9px 12px; border:1px solid var(--line); border-radius:10px }
   .timeline { list-style:none; margin:0; padding:0 } .timeline li { display:grid; grid-template-columns:150px 1fr; gap:12px; padding:9px 0; border-top:1px solid var(--line); font-size:14px } .timeline time { color:var(--muted); font-size:13px } .timeline b { font-weight:500 } .timeline .note { color:var(--ink-2) }
-  .alerts { position:fixed; right:24px; bottom:24px; display:flex; flex-direction:column; gap:10px; width:360px; z-index:9 } .alert { background:var(--ink); color:#fff; border-radius:16px; padding:14px 16px; font-size:13.5px; display:flex; gap:12px; align-items:flex-start; box-shadow:0 14px 40px rgba(0,0,0,.18) } .alert.critical { background:var(--red) } .alert.warning { background:#8a6a00 } .alert button { margin-left:auto; border:1px solid rgba(255,255,255,.4); background:transparent; color:#fff; border-radius:999px; padding:4px 10px; cursor:pointer; font:inherit; font-size:12px }
-  .toast { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 20px; border-radius:999px; font-size:14px; z-index:10; opacity:0; transition:opacity .25s } .toast.show { opacity:1 }
+  .alerts { position:fixed; right:24px; bottom:24px; display:flex; flex-direction:column; gap:10px; width:360px; z-index:9 } .alert { background:var(--ink); color:#fff; border-radius:16px; padding:14px 16px; font-size:13.5px; display:flex; gap:12px; align-items:flex-start; box-shadow:0 14px 40px rgba(0,0,0,.18) } .alert.critical { background:var(--red) } .alert.warning { background:#8a6a00 } .alert button { margin-left:auto; border:1px solid rgba(255,255,255,.4); background:transparent; color:#fff; border-radius:999px; padding:4px 10px; cursor:pointer; font-size:12px }
+  .toast { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:12px 20px; border-radius:999px; font-size:14px; z-index:10; opacity:0; transition:opacity .25s; pointer-events:none } .toast.show { opacity:1 } .toast.bad { background:var(--red) }
+  .banner { background:var(--red-soft); color:var(--red); padding:12px 16px; border-radius:var(--r-s); margin-bottom:16px; font-size:14px }
+  .login { max-width:420px; margin:12vh auto 0 } .login .card { padding:34px } .login h1 { font-weight:300; font-size:30px; margin:14px 0 20px } .login h1 b { font-weight:500 } .login input { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; background:#fff } .login .btn { width:100%; margin-top:6px } .login .links { display:flex; justify-content:space-between; margin-top:14px; font-size:13px } .login .links a { color:var(--ink-2); cursor:pointer } .login .err { color:var(--red); font-size:13.5px; margin-top:10px; min-height:20px }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px } @media (max-width:980px) { .grid2 { grid-template-columns:1fr } }
+  .userrow { display:grid; grid-template-columns:1.4fr 1fr .8fr auto; gap:10px; align-items:center; padding:10px 0; border-top:1px solid var(--line); font-size:14px } .userrow:first-child { border-top:0 }
+  .footer { margin-top:40px; color:var(--muted); font-size:12.5px; display:flex; justify-content:space-between }
 </style>
 </head>
 <body>
-<div class="shell">
-  <div class="top">
-    <div class="brand">Hallmann · Invoices</div>
-    <nav class="nav" id="nav"></nav>
-    <span class="who">I am <select id="actor"><option>Jana</option><option>Thomas</option><option>Sabine</option></select></span>
-  </div>
-  <div id="main"></div>
-</div>
+<div class="shell" id="shell"><div class="empty">Loading…</div></div>
 <div id="alerts" class="alerts"></div>
 <div id="toast" class="toast"></div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

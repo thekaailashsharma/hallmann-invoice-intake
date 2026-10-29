@@ -52,6 +52,15 @@ services:
       - DATABASE_URL=postgres://intake:${POSTGRES_PASSWORD:-intake}@postgres:5432/intake
       - N8N_WEBHOOK_BASE=${N8N_WEBHOOK_BASE:-http://n8n:5678/webhook}
       - PORT=3001
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_API_KEY=${FIREBASE_API_KEY}
+      - FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN}
+      - FIREBASE_REFRESH_TOKEN_FILE=/secrets/firebase-refresh.json
+      - FIREBASE_SERVICE_ACCOUNT_FILE=/secrets/firebase-service-account.json
+      - DEMO_MODE=${DEMO_MODE:-false}
+      - CLERK_APPROVAL_LIMIT=${CLERK_APPROVAL_LIMIT:-10000}
+    volumes:
+      - ./secrets:/secrets:ro
     restart: unless-stopped
 
 volumes:

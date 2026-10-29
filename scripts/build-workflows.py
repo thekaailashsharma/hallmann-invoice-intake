@@ -208,22 +208,36 @@ chk = D.node("Validate correction", "n8n-nodes-base.code", 2, {"jsCode": VALIDAT
 // ── glue ──
 const req = $('Decision In').item.json.body || {};
 const before = $json;
-const action = ['approve', 'save', 'reject'].includes(req.action) ? req.action : 'save';
+const action = ['approve', 'save', 'reject', 'reopen'].includes(req.action) ? req.action : 'save';
 const actor = String(req.actor || 'unknown').slice(0, 60);
+const role = ['clerk', 'lead', 'admin'].includes(req.role) ? req.role : 'clerk';
+const CLERK_LIMIT = 10000; // EUR gross; above this a lead or admin must approve
 if (!before.id) return [{ json: { ok: false, code: 404, reasons: ['Unknown document.'], action, actor, before } }];
+if (action === 'reopen') {
+  if (before.status !== 'rejected') return [{ json: { ok: false, code: 409, reasons: ['Only rejected documents can be reopened.'], action, actor, before } }];
+  if (role === 'clerk') return [{ json: { ok: false, code: 403, reasons: ['Only a lead or admin can reopen a rejected document.'], action, actor, before } }];
+  return [{ json: { ok: true, code: 200, action, actor, note: req.note || null, before } }];
+}
 if (!['needs_review', 'pending_erp'].includes(before.status)) return [{ json: { ok: false, code: 409, reasons: [`Document is ${before.status}; it cannot be changed.`], action, actor, before } }];
 const fields = { ...req.fields, doc_type: req.fields?.doc_type || before.doc_type };
 const existing = new Set(Array.isArray(before.existing_keys) ? before.existing_keys : []);
 const r = validateInvoice(fields, { existingInvoiceNumbers: existing, today: new Date().toISOString().slice(0, 10) });
-const ok = action !== 'approve' || r.decision === 'auto_book';
-return [{ json: { ok, code: ok ? 200 : 422, action, actor, note: req.note || null, reasons: r.reasons, warnings: r.warnings, normalized: r.normalized, before } }];"""}, 120, 0)
+let ok = action !== 'approve' || r.decision === 'auto_book';
+let code = ok ? 200 : 422;
+if (action === 'approve' && ok && role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) { ok = false; code = 403; r.reasons.unshift(`Gross amount above ${CLERK_LIMIT.toLocaleString('en')} EUR: a lead must approve this.`); }
+return [{ json: { ok, code, action, actor, role, note: req.note || null, reasons: r.reasons, warnings: r.warnings, normalized: r.normalized, before } }];"""}, 120, 0)
 D.link(ld, chk)
 okq = if_node(D, "Accepted?", "={{ $json.ok }}", "true", True, 360, 0)
 D.link(chk, okq)
 D.node("Refuse", "n8n-nodes-base.respondToWebhook", 1.4, {"respondWith": "json", "responseBody": "={{ JSON.stringify({ ok: false, reasons: $json.reasons }) }}", "options": {"responseCode": "={{ $json.code }}"}}, 600, 200)
 D.link(okq, "Refuse", 1)
-isrej = if_node(D, "Reject?", "={{ $json.action }}", "equals", "reject", 600, -120, "string")
-D.link(okq, isrej, 0)
+isreo = if_node(D, "Reopen?", "={{ $json.action }}", "equals", "reopen", 600, -120, "string")
+D.link(okq, isreo, 0)
+D.pg("Reopen", "with u as (update documents set status = 'needs_review', reasons = reasons || jsonb_build_array('Reopened by ' || $2 || coalesce(': ' || $3, '')) where id = $1::uuid and status = 'rejected' returning id), a as (insert into audit_log (actor, action, document_id, note) select $2, 'reopened', u.id, $3 from u returning id) select 'reopened' as status, 'Reopened.' as message",
+     "[ $json.before.id, $json.actor, $json.note ]", 840, -360)
+D.link(isreo, "Reopen", 0)
+isrej = if_node(D, "Reject?", "={{ $json.action }}", "equals", "reject", 840, -200, "string")
+D.link(isreo, isrej, 1)
 D.pg("Mark rejected", "with u as (update documents set status = 'rejected', reasons = reasons || jsonb_build_array('Rejected by ' || $2 || ': ' || coalesce($3, 'no reason given')) where id = $1::uuid returning id), a as (insert into audit_log (actor, action, document_id, note) select $2, 'rejected', u.id, $3 from u returning id) select 'rejected' as status, 'Rejected.' as message",
      "[ $json.before.id, $json.actor, $json.note ]", 840, -240)
 D.link(isrej, "Mark rejected", 0)
@@ -232,7 +246,7 @@ UPD = (f"with u as (update documents set doc_type = $2::doc_type, supplier_name 
        "insert into audit_log (actor, action, document_id, before, after, note) select $19, $20, u.id, $21::jsonb, $22::jsonb, $23 from u returning document_id as id, (select status from u) as status")
 UPD_P = lambda status, action, note: (f"[ $json.before.id, {n}.doc_type, {n}.supplier_name, {n}.supplier_vat_id, {n}.supplier_country, {n}.invoice_number, {n}.invoice_date, {n}.due_date, {n}.currency, {n}.po_number, {n}.net_amount, {n}.vat_rate, {n}.vat_amount, {n}.gross_amount, {n}.related_invoice, "
                                        f"JSON.stringify($json.reasons), JSON.stringify($json.warnings), '{status}', $json.actor, '{action}', JSON.stringify((({{ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }}) => ({{ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }}))($json.before)), JSON.stringify({n}), {note} ]")
-isappr = if_node(D, "Approve?", "={{ $json.action }}", "equals", "approve", 840, -40, "string")
+isappr = if_node(D, "Approve?", "={{ $json.action }}", "equals", "approve", 1080, -200, "string")
 D.link(isrej, isappr, 1)
 D.pg("Save corrections", UPD, UPD_P("needs_review", "corrected", "'Fields corrected; still open.'"), 1080, 40)
 D.link(isappr, "Save corrections", 1)
@@ -241,7 +255,7 @@ D.link(isappr, "Approve → pending booking", 0)
 bk = exec_wf(D, "Book in ERP", IDS["erp"], {"document_id": "={{ $json.id }}", "actor": "={{ $('Validate correction').item.json.actor }}"}, 1320, -120)
 D.link("Approve → pending booking", bk)
 D.node("Respond", "n8n-nodes-base.respondToWebhook", 1.4, {"respondWith": "json", "responseBody": "={{ JSON.stringify({ ok: true, status: $json.status, message: ({ booked: 'Booked in the ERP.', pending_erp: 'Approved. ERP is down right now; it will be booked automatically when it is back.', duplicate: 'ERP refused it: this invoice number is already booked.', needs_review: 'Saved.', rejected: 'Rejected.' })[$json.status] || $json.status }) }}", "options": {}}, 1560, -40)
-for src in ("Mark rejected", "Save corrections", bk): D.link(src, "Respond")
+for src in ("Mark rejected", "Save corrections", "Reopen", bk): D.link(src, "Respond")
 D.dump("04-review-decision.json")
 
 # ═══════════════════════════════════ E · ERROR HANDLER ═══════════════════════════════════
