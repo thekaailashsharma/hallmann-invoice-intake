@@ -9,7 +9,7 @@ const load = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
 const validator = fs.readFileSync(path.join(__dirname, '..', 'shared', 'validate.js'), 'utf8');
 
 test('five workflows export with stable ids', () => {
-  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-erp-retry.json', '04-review-decision.json', '05-error-handler.json']);
+  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-erp-retry.json', '04-review-decision.json', '05-error-handler.json', '06-user-admin.json']);
   for (const f of files) assert.match(load(f).id, /^Inv[A-Za-z0-9]{14}$/);
 });
 
@@ -24,7 +24,7 @@ test('every connection targets an existing node', () => {
 });
 
 test('all operational workflows route failures to the error handler', () => {
-  for (const f of files.slice(0, 4)) assert.equal(load(f).settings.errorWorkflow, 'InvErrorHandler01', f);
+  for (const f of files.filter((x) => !x.includes('error-handler'))) assert.equal(load(f).settings.errorWorkflow, 'InvErrorHandler01', f);
 });
 
 test('the validator embedded in n8n is byte-identical to shared/validate.js (and to the app copy)', () => {

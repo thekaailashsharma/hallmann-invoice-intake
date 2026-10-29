@@ -19,6 +19,7 @@ chmod 644 "$TMP/creds.json"
 docker cp "$TMP/creds.json" "$N8N_CONTAINER:/tmp/creds.json"
 docker exec "$N8N_CONTAINER" n8n import:credentials --input=/tmp/creds.json | grep -i success
 docker exec -u root "$N8N_CONTAINER" rm -f /tmp/creds.json; rm -rf "$TMP"
+docker exec intake-postgres psql -U intake -d intake -q -c "insert into app_settings (key, value) values ('super_admin_key', crypt('${SUPER_ADMIN_KEY}', gen_salt('bf'))) on conflict (key) do update set value = excluded.value, updated_at = now()"
 python3 scripts/import-workflows.py
 echo "→ n8n:    $N8N_URL"
 echo "→ review: http://localhost:3001"

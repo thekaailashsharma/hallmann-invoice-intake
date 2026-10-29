@@ -11,7 +11,7 @@ N8N_URL = os.environ.get("N8N_URL", "http://localhost:5681")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NEEDS = {"n8n-nodes-base.postgres": ("postgres", "IntakePostgres001", "Intake Postgres"),
          "@n8n/n8n-nodes-langchain.lmChatOpenAi": ("openAiApi", "IntakeLlmOpenAi01", "LLM (OpenAI-compatible: Sarvam-105B)")}
-ACTIVATE = ["InvIntake00000001", "InvErpBooking0001", "InvErpRetry000001", "InvReviewDecision", "InvErrorHandler01"]
+ACTIVATE = ["InvIntake00000001", "InvErpBooking0001", "InvErpRetry000001", "InvReviewDecision", "InvErrorHandler01", "InvUserAdmin00001"]
 def dx(*a): return subprocess.run(["docker", "exec", *a], capture_output=True, text=True)
 bundle = []
 for f in sorted((ROOT / "workflows").glob("*.json")):
