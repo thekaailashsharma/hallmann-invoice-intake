@@ -55,13 +55,13 @@ LOOK = {
      ("One per document", "loop", "skip what is saved", ["Prepare documents", "One document at a time", "Next document"]),
      ("Guardrails", "shield", "injection / jailbreak", ["Guardrails", "Flag: guardrail tripped"]),
      ("AI reads", "ai", "7 types · fields", ["Classify", "Extract", "Sarvam-105B"]),
-     ("Not payable", "stop", "proforma · order · statement", ["Proforma / quote", "Order confirmation", "Statement of account", "AI could not read"]),
      ("Rules decide", "rules", "unit-tested, no AI", ["Supplier + earlier invoices", "Validate"]),
      ("Save + book", "erp", "only clean invoices", ["Save document", "Book now?", "Book in ERP"]),
+     ("Not payable", "stop", "proforma · order · statement", ["Proforma / quote", "Order confirmation", "Statement of account", "AI could not read"]),
      ("After the loop", "mail", "not-an-invoice · minimise", ["Record not-an-invoice", "Keep only what is needed"])]),
   "ERP Booking": ("erp.gif", "ERP booking", "Real-time API. Never twice. Waits when the ERP is down.", [
      ("Ways in", "clock", "now or every 5 min", ["Book now (called)", "Every 5 minutes", "Run now", "Waiting bookings"]),
-     ("Book once", "erp", "lock · send · read answer", ["Claim document", "Send to ERP", "Read ERP answer", "Record result", "What next?"]),
+     ("Book once", "erp", "lock · send · read answer", ["Claim document", "Send to ERP", "No answer from ERP", "Read ERP answer", "Record result", "What next?"]),
      ("Tell Avanai", "bell", "one alert per problem", ["Alert", "New alert?", "E-mail Avanai on-call", "Close ERP-down alert"])]),
   "Review Decision": ("review.gif", "Review decision", "Same rules as the intake. Every change audited.", [
      ("Check", "person", "key · role · rules", ["Decision in", "Load document + user", "Check decision", "Accepted?", "Refuse"]),
@@ -73,6 +73,19 @@ LOOK = {
      ("E-mail on-call", "mail", "new alerts only", ["New alert?", "E-mail Avanai on-call"])]),
 }
 SX, SY = 1.45, 1.6
+ASSETS = ROOT / "n8n-assets"
+def chip(fname, num, title, sub):
+    """Step label: dark pill, yellow step number, title and a few words. Rendered once per section."""
+    from PIL import Image, ImageDraw, ImageFont
+    f = lambda sz, b=True: ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf" if b else "/System/Library/Fonts/Supplemental/Arial.ttf", sz)
+    S, W, H = 3, 330, 64
+    im = Image.new("RGBA", (W * S, H * S), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, W * S - 1, H * S - 1), radius=18 * S, fill=(28, 28, 30))
+    d.ellipse((12 * S, 12 * S, 52 * S, 52 * S), fill=(247, 212, 76))
+    d.text((32 * S, 32 * S), str(num), fill=(28, 28, 30), font=f(20 * S), anchor="mm")
+    d.text((66 * S, 22 * S), title, fill=(255, 255, 255), font=f(17 * S), anchor="lm")
+    d.text((66 * S, 44 * S), sub, fill=(176, 176, 182), font=f(12 * S, False), anchor="lm")
+    im.resize((W, H), Image.LANCZOS).save(ASSETS / fname)
 def _decorate(self):
     look = LOOK.get(self.name)
     if not look: return
@@ -82,11 +95,12 @@ def _decorate(self):
     gif, title, line, groups = look
     mx, my = min(p[0] for p in pos.values()), min(p[1] for p in pos.values())
     tops = [my]
-    for gname, ic, desc, names in groups:
+    for i, (gname, ic, desc, names) in enumerate(groups, 1):
         pts = [pos[n] for n in names if n in pos]
         if not pts: continue
         x, y = min(p[0] for p in pts), min(p[1] for p in pts)
-        self.sticky(f"![]({IMG}/{ic}.png)\n**{gname}**  \n{desc}", x - 40, y - 250, 260, 210, 5); tops.append(y - 250)
+        slug = f"{self.id.lower()}-{i}.png"; chip(slug, i, gname, desc)
+        self.sticky(f"![]({IMG}/{slug})", x - 30, y - 130, 360, 100, 0); tops.append(y - 130)
     self.sticky(f"![]({IMG}/{gif})\n## {title}\n{line}", mx - 60, min(tops) - 400, 800, 340, 7)
 WF.decorate = _decorate
 
@@ -335,7 +349,8 @@ const outcome = (code === 200 || code === 201) && body && body.id ? 'booked' : (
 const msg = outcome === 'booked' ? 'Booked in ERP.' : outcome === 'down' ? `ERP not reachable (${code || ($json.error && $json.error.message) || 'no answer'}). Waiting; retried every 5 minutes.`
   : `ERP answered ${code}: ${typeof body === 'object' ? (body.error || JSON.stringify(body)) : String(body).slice(0, 200)}${body.fields ? ' (' + body.fields.join(', ') + ')' : ''}`;
 return { json: { document_id: doc.id, actor: doc.actor, outcome, erp_id: body.id || null, msg } };""", 300, 0)
-B.link("Send to ERP", "Read ERP answer", 0); B.link("Send to ERP", "Read ERP answer", 1)
+B.node("No answer from ERP", "n8n-nodes-base.set", 3.4, {"assignments": {"assignments": [{"id": nid(), "name": "statusCode", "value": 0, "type": "number"}, {"id": nid(), "name": "body", "value": "={{ { error: ($json.error && $json.error.message) || 'no answer (timeout or connection refused)' } }}", "type": "object"}]}, "options": {}}, 190, 160)
+B.link("Send to ERP", "Read ERP answer", 0); B.link("Send to ERP", "No answer from ERP", 1); B.link("No answer from ERP", "Read ERP answer")
 RECORD = ("with r as (select $1::uuid as id, $2::text as outcome, $3::text as erp_id, $4::text as msg, $5::text as actor), "
           "u as (update documents d set "
           "status = (case r.outcome when 'booked' then 'booked' when 'duplicate' then 'duplicate' when 'rejected' then 'needs_review' when 'error' then case when d.erp_attempts + 1 >= 3 then 'needs_review' else 'pending_erp' end else 'pending_erp' end)::doc_status, "
