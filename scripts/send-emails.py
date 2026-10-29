@@ -34,6 +34,7 @@ with smtplib.SMTP(host, port, timeout=20) as s:
         m["Date"] = format_datetime(datetime.fromisoformat(e["received_at"].replace("Z", "+00:00")))
         for k, v in (e.get("headers") or {}).items(): m[k] = v
         m.set_content(e["body"])
-        if e.get("attachment"): m.add_attachment(pdf(e["attachment"]["lines"]), maintype="application", subtype="pdf", filename=e["attachment"]["name"])
+        for att in ([e["attachment"]] if e.get("attachment") else []) + e.get("attachments", []):
+            m.add_attachment(pdf(att["lines"]), maintype="application", subtype="pdf", filename=att["name"])
         s.send_message(m)
         print(f"sent {e['id']}  {e['subject'][:60]}")

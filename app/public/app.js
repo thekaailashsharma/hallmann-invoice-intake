@@ -117,6 +117,20 @@ async function invoices() {
   syncFilter(); load();
 }
 
+// ── PDF preview: pages rendered with PDF.js (same look in every browser, no plugin needed) ──
+let pdfjsReady = null;
+const loadPdfjs = () => pdfjsReady || (pdfjsReady = new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  sc.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); }; sc.onerror = bad; document.head.appendChild(sc); }));
+async function renderPdf(box, data) {
+  const lib = await loadPdfjs(); const pdf = await lib.getDocument({ data }).promise; box.innerHTML = '';
+  const width = box.clientWidth - 48; const dpr = window.devicePixelRatio || 1;
+  for (let n = 1; n <= Math.min(pdf.numPages, 20); n++) {
+    const page = await pdf.getPage(n); const base = page.getViewport({ scale: 1 }); const vp = page.getViewport({ scale: (width / base.width) * dpr });
+    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; c.style.width = width + 'px'; c.className = 'pdfpage';
+    box.appendChild(c); await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  }
+}
+
 // ── document ──
 const FIELDS = ['supplier_name', 'supplier_vat_id', 'invoice_number', 'invoice_date', 'due_date', 'currency', 'po_number', 'net_amount', 'vat_rate', 'vat_amount', 'gross_amount', 'related_invoice'];
 const FI = { supplier_name: 'building', supplier_vat_id: 'id', invoice_number: 'hash', invoice_date: 'cal', due_date: 'clock', currency: 'globe', po_number: 'po', net_amount: 'euro', vat_rate: 'pct', vat_amount: 'euro', gross_amount: 'euro', related_invoice: 'link' };
@@ -128,13 +142,15 @@ async function doc(id) {
   const main = await frame('invoices', '');
   let d; try { d = await api(`/api/documents/${id}`); } catch (e) { main.innerHTML = `<div class="banner">${esc(e.message)}</div>`; return; }
   document.getElementById('title').innerHTML = `${esc(d.supplier_name || d.from_addr || T('doc_type.' + d.doc_type))}<span class="num2">${esc(d.invoice_number || '')}</span>`;
+  const preview = !!d.file_name && localStorage.getItem('pdfPreview') !== 'off';
   const editable = d.status === 'needs_review'; const canReopen = d.status === 'rejected' && me.role !== 'clerk'; const items = Array.isArray(d.line_items) ? d.line_items : []; const bad = BAD(d.reasons);
   main.innerHTML = `<a class="back" href="#invoices">${I.back}${T('back')}</a>
     <div class="head"><div>${pill(d.status)} <span class="pill">${T('doc_type.' + d.doc_type)}</span>${d.injection_flag ? ` <span class="pill rejected">${I.shield}${T('suspicious_short')}</span>` : ''}
       <div class="meta"><span>${I.mail}${esc(d.from_addr)}</span><span>${I.clock}${fmt.ts(d.received_at)}</span>${d.due_date ? `<span>${I.cal}${T('f.due_date')} ${new Date(d.due_date).toLocaleDateString(locale())}</span>` : ''}${d.po_number ? `<span>${I.po}PO ${esc(d.po_number)}</span>` : ''}${d.supplier_vat_id ? `<span>${I.id}${esc(d.supplier_vat_id)}</span>` : ''}${d.source && d.source !== 'email' ? `<span>${I.file}${esc(d.source)}</span>` : ''}</div></div>
       ${d.gross_amount != null ? `<div class="amt"><div class="n">${fmt.money(d.gross_amount, d.currency)}</div><div class="l">${T('f.gross_amount')}</div></div>` : ''}</div>
-    <div class="split">
-      <div class="card"><h2>${I.mail}${T('original')}<span class="sub">${esc(d.subject)}</span></h2><pre class="mail">${esc(d.body)}</pre></div>
+    <div class="split ${preview ? 'preview' : ''}">
+      ${preview ? `<div class="pdfpane"><div class="ph">${I.file}<b>${esc(d.file_name)}</b><span class="grow"></span><button class="iconbtn" id="pdfTab" title="${T('open_tab')}">${I.out}</button><button class="iconbtn" id="pdfClose" title="${T('hide_doc')}">${I.x}</button></div><div class="pdfwrap" id="pdfwrap"><div class="empty">${T('loading')}</div></div></div>`
+        : `<div class="card"><h2>${I.mail}${T('original')}<span class="sub">${esc(d.subject)}</span></h2><pre class="mail">${esc(d.body)}</pre></div>`}
       <div><div class="card"><h2>${I.file}${T('extracted')}<span class="sub">${editable ? T('edit_hint') : T('readonly')}</span></h2>
         ${breakdown(d.net_amount, d.vat_amount, d.gross_amount, d.currency)}
         ${d.injection_flag ? `<div class="check danger" style="margin:0 0 14px">${I.shield}<div>${T('suspicious')}</div></div>` : ''}
@@ -144,7 +160,15 @@ async function doc(id) {
         <div id="check" class="check"></div>
         <div class="actions">${editable ? `<button class="btn primary" id="approve">${I.check}${T('approve')}</button><button class="btn" id="save">${T('save')}</button><button class="btn quiet" id="reject">${T('reject')}</button>` : ''}${canReopen ? `<button class="btn" id="reopen">${T('reopen')}</button>` : ''}</div><div id="inline"></div></div>
       <div class="card" style="margin-top:16px"><h2>${I.activity}${T('history')}</h2><ul class="timeline">${d.audit.map((a) => `<li class="${a.actor === 'system' ? '' : 'user'}"><time>${fmt.ts(a.ts)}</time><b>${esc(a.actor)}</b> · ${esc(tAction(a.action))}${a.note ? `<div class="note">${esc(tReason(a.note))}</div>` : ''}</li>`).join('')}</ul></div></div></div>`;
-  document.getElementById('acts').innerHTML = `<button class="btn" id="next">${T('next_in_queue')}${I.next}</button>`;
+  document.getElementById('acts').innerHTML = `${d.file_name && !preview ? `<button class="btn" id="pdfOpen">${I.file}${T('show_doc')}</button>` : ''}<button class="btn" id="next">${T('next_in_queue')}${I.next}</button>`;
+  const setPreview = (on) => { try { localStorage.setItem('pdfPreview', on ? 'on' : 'off'); } catch (e) {} doc(id); };
+  if (preview) {
+    try { const r = await fetch(`/api/documents/${id}/file`, { headers: { authorization: `Bearer ${await token()}` } }); if (!r.ok) throw new Error(r.statusText);
+      const blob = await r.blob(); const url = URL.createObjectURL(blob); await renderPdf(document.getElementById('pdfwrap'), await blob.arrayBuffer());
+      document.getElementById('pdfTab').onclick = () => window.open(url, '_blank', 'noopener'); }
+    catch (e) { document.getElementById('pdfwrap').innerHTML = `<div class="empty">${T('load_error')}</div>`; }
+    document.getElementById('pdfClose').onclick = () => setPreview(false);
+  } else if (d.file_name) document.getElementById('pdfOpen').onclick = () => setPreview(true);
   const form = document.getElementById('f'), check = document.getElementById('check'), inline = document.getElementById('inline');
   const fieldsOf = () => Object.fromEntries([...new FormData(form)].map(([k, v]) => [k, v])); let last = null;
   const runCheck = async () => { const r = await api('/api/validate', { method: 'POST', body: { document_id: id, fields: fieldsOf() } }); last = r; const ok = r.decision === 'auto_book'; const b = BAD(r.reasons); form.querySelectorAll('.field').forEach((f) => { const inp = f.querySelector('input'); f.classList.toggle('bad', !!inp && b.has(inp.name)); });

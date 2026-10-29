@@ -92,8 +92,8 @@
  "msg-015": {
   "status": "ignored",
   "doc_type": "other",
-  "reason": "Automatic reply",
-  "why": "out-of-office auto-reply, never sent to the AI"
+  "reason": "Not an invoice",
+  "why": "out-of-office reply: AI says 'other', recorded once"
  },
  "msg-016": {
   "status": "needs_review",
@@ -106,5 +106,17 @@
   "status": "duplicate",
   "doc_type": "invoice",
   "why": "same invoice as msg-007, number written as 'RE 2026 0931'"
+ },
+ "msg-018": {
+  "status": "ignored",
+  "doc_type": "proforma",
+  "reason": "Proforma",
+  "why": "proforma invoice in a PDF: never payable"
+ },
+ "msg-019": {
+  "status": "booked",
+  "doc_type": "invoice",
+  "gross": 1071.0,
+  "why": "invoice PDF + terms-and-conditions PDF: only the invoice becomes a document"
  }
 }

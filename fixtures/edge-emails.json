@@ -57,6 +57,74 @@
       "from": "rechnung@schaefer-elektro.example",
       "subject": "Rechnung RE 2026 0931 (Kopie)",
       "body": "Sehr geehrte Damen und Herren,\n\nzur Sicherheit erneut unsere Rechnung.\n\nSchäfer Elektrotechnik GmbH\nUSt-IdNr.: DE276554310\n\nRechnungsnr.: RE 2026 0931\nRechnungsdatum: 07.10.2026\nFällig: 06.11.2026\nBestellnummer: 4500178901\n\nNetto: 1.234,56 EUR\nMwSt. 19 %: 234,57 EUR\nBrutto: 1.469,13 EUR"
+    },
+    {
+      "id": "msg-018",
+      "received_at": "2026-10-24T09:00:00Z",
+      "from": "rechnung@schaefer-elektro.example",
+      "subject": "Proformarechnung PR-2026-0120",
+      "body": "Sehr geehrte Damen und Herren,\n\nanbei unsere Proformarechnung für die geplante Erweiterung. Bitte noch nicht zahlen.\n\nMit freundlichen Grüßen\nSchäfer Elektrotechnik GmbH",
+      "attachments": [
+        {
+          "name": "PR-2026-0120.pdf",
+          "lines": [
+            "Schäfer Elektrotechnik GmbH",
+            "USt-IdNr.: DE276554310",
+            "",
+            "PROFORMARECHNUNG",
+            "Nr.: PR-2026-0120",
+            "Datum: 24.10.2026",
+            "Gültig bis: 30.11.2026",
+            "",
+            "Schaltschrank-Erweiterung (Angebot)   8.000,00 EUR",
+            "Netto: 8.000,00 EUR",
+            "MwSt. 19 %: 1.520,00 EUR",
+            "Gesamt: 9.520,00 EUR",
+            "",
+            "Dies ist keine Rechnung. Keine Zahlung fällig."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "msg-019",
+      "received_at": "2026-10-25T09:00:00Z",
+      "from": "buchhaltung@kessler-druck.example",
+      "subject": "Rechnung KD-2026-1180",
+      "body": "Guten Tag,\n\nanbei Rechnung und unsere AGB.\n\nKessler Druck & Medien GmbH",
+      "attachments": [
+        {
+          "name": "KD-2026-1180.pdf",
+          "lines": [
+            "Kessler Druck & Medien GmbH",
+            "USt-IdNr.: DE301447892",
+            "",
+            "RECHNUNG",
+            "Rechnungsnummer: KD-2026-1180",
+            "Rechnungsdatum: 25.10.2026",
+            "Zahlbar bis: 24.11.2026",
+            "Ihre Bestellnummer: 4500179300",
+            "",
+            "Druck Bedienungsanleitungen, 500 Stk.   900,00 EUR",
+            "Netto: 900,00 EUR",
+            "MwSt. 19 %: 171,00 EUR",
+            "Brutto: 1.071,00 EUR"
+          ]
+        },
+        {
+          "name": "AGB-Kessler-2026.pdf",
+          "lines": [
+            "Allgemeine Geschäftsbedingungen",
+            "Kessler Druck & Medien GmbH",
+            "",
+            "1. Geltungsbereich",
+            "Diese AGB gelten für alle Aufträge.",
+            "2. Zahlung",
+            "Zahlbar innerhalb von 30 Tagen ohne Abzug.",
+            "3. Gerichtsstand ist Stuttgart."
+          ]
+        }
+      ]
     }
   ]
 }

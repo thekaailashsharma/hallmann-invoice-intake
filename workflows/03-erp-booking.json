@@ -9,7 +9,7 @@
         "width": 980,
         "color": 4
       },
-      "id": "21de6537-6564-4106-aadc-353cae897b3d",
+      "id": "eb235238-cb08-46dd-baf1-f8dbdc58ae3a",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -34,7 +34,7 @@
           ]
         }
       },
-      "id": "9da1a08a-39e5-47fe-ab31-429ed5f607fd",
+      "id": "f8225fc1-4198-4f01-a078-9e5f716e3bd3",
       "name": "Book now (called)",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -54,7 +54,7 @@
           ]
         }
       },
-      "id": "65a26322-4bec-4b3f-9616-e654867d76ea",
+      "id": "bafea290-7243-4328-a844-00a6c0e8e0d5",
       "name": "Every 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
@@ -65,7 +65,7 @@
     },
     {
       "parameters": {},
-      "id": "a125a73b-5d30-4d3b-bb0a-ce7aadd78ada",
+      "id": "ecf0d7cf-e301-42b8-9b6e-5f3aef89dc93",
       "name": "Run now",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -80,7 +80,7 @@
         "query": "select id as document_id, 'system' as actor from documents where status = 'pending_erp' and erp_attempts < 3 and (booking_started_at is null or booking_started_at < now() - interval '2 minutes') order by created_at limit 50",
         "options": {}
       },
-      "id": "c0abad8b-8feb-419d-9f51-98c4e5488f37",
+      "id": "1d438df2-a0ae-4d20-9e3c-4d43ec60614d",
       "name": "Waiting bookings",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -100,7 +100,7 @@
           "queryReplacement": "={{ [ $json.document_id, $json.actor || 'system' ] }}"
         }
       },
-      "id": "cb3986fc-49b2-4fb2-8e44-065e6ae104d4",
+      "id": "d0c0ef8a-fdad-4032-a106-ec76e07185da",
       "name": "Claim document",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -131,7 +131,7 @@
           }
         }
       },
-      "id": "90605a7e-2575-4e12-b822-f736ff5de3c1",
+      "id": "ec1604fc-0683-4f68-b8e7-75a2df41696c",
       "name": "Send to ERP",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
@@ -149,7 +149,7 @@
         "jsCode": "// Map the ERP's HTTP answer to one outcome. Network errors (no answer after 3 quick tries) arrive on the error output as 'down'.\nconst doc = $('Claim document').item.json; const code = Number($json.statusCode || 0); const body = $json.body || {};\nconst outcome = code === 200 || code === 201 ? 'booked' : code === 409 ? 'duplicate' : [400, 404, 422].includes(code) ? 'rejected' : [0, 502, 503, 504].includes(code) || !code ? 'down' : 'error';\nconst msg = outcome === 'booked' ? 'Booked in ERP.' : outcome === 'down' ? `ERP not reachable (${code || ($json.error && $json.error.message) || 'no answer'}). Waiting; retried every 5 minutes.`\n  : `ERP answered ${code}: ${typeof body === 'object' ? (body.error || JSON.stringify(body)) : String(body).slice(0, 200)}${body.fields ? ' (' + body.fields.join(', ') + ')' : ''}`;\nreturn { json: { document_id: doc.id, actor: doc.actor, outcome, erp_id: body.id || null, msg } };",
         "mode": "runOnceForEachItem"
       },
-      "id": "df102196-5462-4e49-8571-ab900cc96344",
+      "id": "6523ed3b-697e-43aa-8d3f-bdbd67b09af8",
       "name": "Read ERP answer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -166,7 +166,7 @@
           "queryReplacement": "={{ [ $json.document_id, $json.outcome, $json.erp_id, $json.msg, $json.actor ] }}"
         }
       },
-      "id": "6e2976e9-66bc-4b01-8689-67022a9b10e9",
+      "id": "82d89033-549b-4db9-829e-69ab435f6db0",
       "name": "Record result",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -192,7 +192,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "1d1159b5-2fa6-45ae-8c85-bd663348b10d",
+                    "id": "912b43a4-f55d-41a1-b6fc-b15f007c3353",
                     "leftValue": "={{ $json.outcome === 'down' }}",
                     "rightValue": "",
                     "operator": {
@@ -217,7 +217,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "747be3dd-15c6-4c78-b1fd-13775315a702",
+                    "id": "89ab0b2e-b17f-4032-960b-18cb76b709b7",
                     "leftValue": "={{ $json.handed_back }}",
                     "rightValue": "",
                     "operator": {
@@ -242,7 +242,7 @@
                 },
                 "conditions": [
                   {
-                    "id": "2d078389-b6d8-4384-8b54-66b831ef9f48",
+                    "id": "89f7c0c2-2e46-4aa9-902a-e4ee4ce59b50",
                     "leftValue": "={{ $json.outcome === 'booked' }}",
                     "rightValue": "",
                     "operator": {
@@ -261,7 +261,7 @@
         },
         "options": {}
       },
-      "id": "70f1b012-b279-4922-b574-81f09933158f",
+      "id": "69633ee0-6c5a-4d2c-9f21-68b226ff7764",
       "name": "What next?",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
@@ -278,7 +278,7 @@
           "queryReplacement": "={{ [ $json.outcome === 'down' ? 'warning' : 'critical', $json.outcome === 'down' ? 'ERP not reachable; bookings wait and are retried every 5 minutes' : 'ERP booking returned to review: ' + ($json.outcome === 'rejected' ? 'ERP refused it' : 'failed 3 times'), $json.document_id, $json.msg ] }}"
         }
       },
-      "id": "9d323668-5b1c-4de4-81da-80ece58e7770",
+      "id": "95b1e673-58f2-41eb-9008-ee0485088205",
       "name": "Alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -296,7 +296,7 @@
         "query": "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and not acknowledged returning id",
         "options": {}
       },
-      "id": "e21947c0-7e0f-4171-bce6-df8bd17a84a0",
+      "id": "a37a9553-cf46-4456-b8fb-3e38fcfb6929",
       "name": "Close ERP-down alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -321,7 +321,7 @@
           },
           "conditions": [
             {
-              "id": "d8e39c2f-2831-4444-8cdc-8379ae1ba6d9",
+              "id": "6f8b215c-b026-46d3-8ee9-e588bae20df2",
               "leftValue": "={{ $json.is_new }}",
               "rightValue": true,
               "operator": {
@@ -335,7 +335,7 @@
         },
         "options": {}
       },
-      "id": "3a214640-f044-4eac-b23c-8c109633a6c3",
+      "id": "8b7a395e-d0d8-45f7-a410-268597746a31",
       "name": "New alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -355,7 +355,7 @@
           "appendAttribution": false
         }
       },
-      "id": "7c4d245e-2463-477a-a8f3-3a2418f53343",
+      "id": "2e2bfaa6-cdb3-45b1-b539-7990c91c6778",
       "name": "E-mail Avanai on-call",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,

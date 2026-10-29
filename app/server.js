@@ -33,7 +33,7 @@ const allowed = (email) => (!ALLOWED_DOMAINS.length && !ALLOWED_EMAILS.length) |
 const app = express();
 app.set('trust proxy', 1);
 // CSP: Firebase's Google sign-in popup needs apis.google.com (script), accounts.google.com + the auth domain (frames).
-app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://www.gstatic.com', 'https://apis.google.com'], connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com', 'https://*.firebase.com', 'https://accounts.google.com'], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ['https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'https://*.googleusercontent.com'], frameSrc: ['https://*.firebaseapp.com', 'https://accounts.google.com'] } }, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' } }));
+app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://www.gstatic.com', 'https://apis.google.com', 'https://cdnjs.cloudflare.com'], workerSrc: ["'self'", 'blob:', 'https://cdnjs.cloudflare.com'], connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com', 'https://*.firebase.com', 'https://accounts.google.com'], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ['https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'https://*.googleusercontent.com'], frameSrc: ['https://*.firebaseapp.com', 'https://accounts.google.com', 'blob:'] } }, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' } }));
 app.use(express.json({ limit: '1mb' }));
 app.use(rateLimit({ windowMs: 60_000, limit: 300 }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -109,10 +109,21 @@ app.get('/api/documents/:id/next', authed(), wrap(async (req, res) => {
 
 app.get('/api/documents/:id', authed(), wrap(async (req, res) => {
   if (!/^[0-9a-f-]{36}$/.test(req.params.id)) return res.status(404).json({ error: 'Not found' });
-  const r = await q(`select d.*, e.from_addr, e.subject, e.body, e.received_at from documents d join inbound_emails e on e.message_id = d.message_id where d.id = $1::uuid`, [req.params.id]);
+  const r = await q(`select d.*, e.from_addr, e.subject, e.body, e.received_at,
+      (select a.name from attachments a where a.message_id = d.message_id and a.mime = 'application/pdf' order by (a.name = d.source) desc, a.name limit 1) as file_name
+    from documents d join inbound_emails e on e.message_id = d.message_id where d.id = $1::uuid`, [req.params.id]);
   if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
   const audit = await q(`select ts, actor, action, note, before, after from audit_log where document_id = $1::uuid order by ts`, [req.params.id]);
   res.json({ ...r.rows[0], audit: audit.rows });
+}));
+
+// The original PDF behind a document (the attachment it was read from, else the email's first PDF). Signed-in users only.
+app.get('/api/documents/:id/file', authed(), wrap(async (req, res) => {
+  if (!/^[0-9a-f-]{36}$/.test(req.params.id)) return res.status(404).json({ error: 'Not found' });
+  const r = await q(`select a.name, a.content from documents d join attachments a on a.message_id = d.message_id where d.id = $1::uuid and a.mime = 'application/pdf' order by (a.name = d.source) desc, a.name limit 1`, [req.params.id]);
+  if (!r.rows.length) return res.status(404).json({ error: 'No file' });
+  res.set({ 'content-type': 'application/pdf', 'content-disposition': `inline; filename="${encodeURIComponent(r.rows[0].name)}"`, 'cache-control': 'private, no-store' });
+  res.send(r.rows[0].content);
 }));
 
 app.post('/api/validate', authed(), wrap(async (req, res) => {

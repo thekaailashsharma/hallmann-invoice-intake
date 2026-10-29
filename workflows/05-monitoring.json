@@ -9,7 +9,7 @@
         "width": 780,
         "color": 3
       },
-      "id": "0a5b9512-26c1-44b9-8ffb-e5b43edc3afc",
+      "id": "e3345a77-b0de-4f5e-a80f-83f632905d3f",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -20,7 +20,7 @@
     },
     {
       "parameters": {},
-      "id": "1b35f44e-f894-45e8-ad0d-4babd2eb697f",
+      "id": "959dfe40-7fcb-4650-9778-41ec68a87d29",
       "name": "Workflow failed",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -37,7 +37,7 @@
           "queryReplacement": "={{ [ 'workflow:' + ($json.workflow && $json.workflow.name || 'unknown'), String(($json.execution && $json.execution.error && $json.execution.error.message) || ($json.trigger && $json.trigger.error && $json.trigger.error.message) || 'Workflow failed').slice(0, 300), JSON.stringify({ execution_id: $json.execution && $json.execution.id, url: $json.execution && $json.execution.url, last_node: $json.execution && $json.execution.lastNodeExecuted }) ] }}"
         }
       },
-      "id": "1913fb7f-1df8-4b65-afc1-efc79d45c866",
+      "id": "02182f91-5593-45a8-9e25-3d7c524a9a27",
       "name": "Record failure",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -61,7 +61,7 @@
           ]
         }
       },
-      "id": "79ab2b25-b4e1-4935-8d18-f7b38b792595",
+      "id": "3ed257bf-f344-48af-b2fa-f7ae0350a26b",
       "name": "Every 15 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
@@ -72,7 +72,7 @@
     },
     {
       "parameters": {},
-      "id": "9921e5d9-270a-4317-97e2-19a55fa3303a",
+      "id": "a9940b80-e962-4189-b719-f56545f7d618",
       "name": "Run now",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -87,7 +87,7 @@
         "query": "select e.message_id, e.from_addr, e.subject, e.body, e.received_at, e.attachments, e.meta from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '10 minutes' order by e.created_at limit 20",
         "options": {}
       },
-      "id": "ea8f2356-dc62-4723-af8c-623e79e7151b",
+      "id": "4254de6f-7650-4224-bc6e-d0996965fc20",
       "name": "Unfinished emails",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -111,7 +111,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "b2a91cdd-8801-48b5-9381-e5d39467f206",
+      "id": "98d8fbf3-8678-42ca-b609-8f321a69875e",
       "name": "Re-run Process Email",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -127,7 +127,7 @@
         "query": "select * from (select 'warning' as severity, 'ERP bookings waiting more than 2 hours' as message, count(*) as n from documents where status = 'pending_erp' and updated_at < now() - interval '2 hours' having count(*) > 0 union all select 'warning', 'Invoices waiting for review more than 2 working days', count(*) from documents where status = 'needs_review' and created_at < now() - interval '2 days' having count(*) > 0 union all select 'critical', 'Emails received but not processed after 30 minutes', count(*) from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '30 minutes' having count(*) > 0 union all select 'warning', 'No email received for 4 hours during business hours (mailbox connection?)', 0 from (select max(created_at) as m from inbound_emails) x where extract(isodow from now() at time zone 'Europe/Berlin') < 6 and extract(hour from now() at time zone 'Europe/Berlin') between 9 and 17 and (x.m is null or x.m < now() - interval '4 hours')) f",
         "options": {}
       },
-      "id": "8f1f81a5-9833-4c48-91ae-9b3805b0f4c0",
+      "id": "fc31d76f-c2b1-47d8-8e29-5752b207ae43",
       "name": "Health checks",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -147,7 +147,7 @@
           "queryReplacement": "={{ [ $json.severity, $json.message, $json.n ] }}"
         }
       },
-      "id": "b021eb0b-8a11-47c4-901a-4367db9dd063",
+      "id": "f60213b9-2b2b-4369-b21b-7fd6386ab8f6",
       "name": "Raise alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -170,7 +170,7 @@
           },
           "conditions": [
             {
-              "id": "04a2d4b1-b89e-4861-9bd7-f11ff55edae3",
+              "id": "3b126f8c-1f65-4555-9b63-ddd437efb0cf",
               "leftValue": "={{ $json.is_new !== false }}",
               "rightValue": true,
               "operator": {
@@ -184,7 +184,7 @@
         },
         "options": {}
       },
-      "id": "1abfae83-6495-4e01-9993-f619fed7fdf7",
+      "id": "c8bd0487-089b-4131-aa52-11020549cf0f",
       "name": "New alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -204,7 +204,7 @@
           "appendAttribution": false
         }
       },
-      "id": "ab02f23c-d8ff-400d-8b58-408fb9c00c6f",
+      "id": "842b161c-f883-4830-84b1-1f7c659714d4",
       "name": "E-mail Avanai on-call",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
