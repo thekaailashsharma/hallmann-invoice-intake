@@ -347,16 +347,17 @@ if (before.status !== 'needs_review') return no(409, `Document is ${before.statu
 if (action === 'reject') return note ? { json: { ok: true, code: 200, action, actor, role, note, before } } : no(422, 'A reason is required to reject.');
 const fields = { ...req.fields, doc_type: req.fields?.doc_type || before.doc_type };
 const r = validateInvoice(fields, { existing: Array.isArray(before.existing) ? before.existing : [], today: new Date().toISOString().slice(0, 10) });
-let ok = true, code = 200, override = false;
+let ok = true, code = 200, override = false, forced = false;
 if (action === 'approve') {
   if (r.decision === 'duplicate') { ok = false; code = 422; r.reasons.unshift('Already in the ERP: this is a duplicate.'); }
   else if (r.decision === 'needs_review') {
     if (r.overridable && role !== 'clerk' && note) override = true;
-    else { ok = false; code = 422; if (r.overridable && role !== 'clerk') r.reasons.unshift('Add a note to accept these exceptions.'); }
+    else if (req.force === true && role !== 'clerk' && note) { override = true; forced = true; }   // lead/admin forced it through the confirmation popup
+    else { ok = false; code = 422; if (role !== 'clerk') r.reasons.unshift(r.overridable ? 'Add a note to accept these exceptions.' : 'Fix the marked fields, or force it with a note.'); }
   }
   if (ok && role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) { ok = false; code = 403; r.reasons.unshift(`Gross amount above ${CLERK_LIMIT.toLocaleString('en')} EUR: a lead must approve this.`); }
 }
-return { json: { ok, code, action, actor, role, note: override ? `Accepted by ${role}: ${note} | Exceptions: ${r.reasons.join(' | ')}` : note, override, reasons: r.reasons, warnings: r.warnings, normalized: r.normalized, before } };""", 100, 0)
+return { json: { ok, code, action, actor, role, note: override ? `${forced ? 'FORCED' : 'Accepted'} by ${role}: ${note} | ${forced ? 'Open issues' : 'Exceptions'}: ${r.reasons.join(' | ')}` : note, override, forced, reasons: r.reasons, warnings: r.warnings, normalized: r.normalized, before } };""", 100, 0)
 D.link("Load document + user", "Check decision", 0)
 if_node(D, "Accepted?", "={{ $json.ok }}", "true", True, 340, 0)
 D.link("Check decision", "Accepted?")
@@ -371,7 +372,7 @@ UPD = ("with u as (update documents set doc_type = $2::doc_type, supplier_name =
        "insert into audit_log (actor, action, document_id, before, after, note) select $19, $20, u.id, $21::jsonb, $22::jsonb, $23 from u returning document_id as id, (select status::text from u) as status")
 UPD_P = lambda status, action, note: (f"[ $json.before.id, {n}.doc_type, {n}.supplier_name, {n}.supplier_vat_id, {n}.supplier_country, {n}.invoice_number, {n}.invoice_date, {n}.due_date, {n}.currency, {n}.po_number, {n}.net_amount, {n}.vat_rate, {n}.vat_amount, {n}.gross_amount, {n}.related_invoice, "
                                        f"JSON.stringify($json.reasons), JSON.stringify($json.warnings), '{status}', $json.actor, {action}, JSON.stringify((({{ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }}) => ({{ supplier_name, supplier_vat_id, invoice_number, invoice_date, due_date, currency, po_number, net_amount, vat_rate, vat_amount, gross_amount, status }}))($json.before)), JSON.stringify({n}), {note} ]")
-D.pg("Approve → ready to book", UPD, UPD_P("pending_erp", "($json.override ? 'approved_with_exception' : 'approved')", "($json.note || 'Approved after review. All checks pass.')"), 840, -320, onError="continueErrorOutput")
+D.pg("Approve → ready to book", UPD, UPD_P("pending_erp", "($json.forced ? 'approved_forced' : $json.override ? 'approved_with_exception' : 'approved')", "($json.note || 'Approved after review. All checks pass.')"), 840, -320, onError="continueErrorOutput")
 D.pg("Save corrections", UPD, UPD_P("needs_review", "'corrected'", "'Fields corrected; still open.'"), 840, -140, onError="continueErrorOutput")
 D.pg("Mark rejected", "with u as (update documents set status = 'rejected', updated_at = now(), reasons = reasons || jsonb_build_array('Rejected by ' || $2 || ': ' || $3) where id = $1::uuid and status = 'needs_review' returning id), a as (insert into audit_log (actor, action, document_id, note) select $2, 'rejected', u.id, $3 from u returning id) select 'rejected' as status",
      "[ $json.before.id, $json.actor, $json.note ]", 840, 40, onError="continueErrorOutput")

@@ -5,6 +5,7 @@ const I = { // inline icons (Lucide-style strokes)
   inbox: '<svg class="i" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></svg>',
   activity: '<svg class="i" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>', users: '<svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>',
   check: '<svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>', alert: '<svg class="i" viewBox="0 0 24 24"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  lock: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
   clock: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>', x: '<svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>', copy: '<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   mail: '<svg class="i" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 7L2 7"/></svg>', search: '<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>', back: '<svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>', next: '<svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
   shield: '<svg class="i" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1 1 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1z"/></svg>', building: '<svg class="i" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></svg>',
@@ -132,6 +133,12 @@ async function renderPdf(box, data) {
 }
 
 // ── document ──
+// ── amounts: auto-calculated while typing (gross anchors); a field you type into yourself is locked and kept ──
+const AMT = ['net_amount', 'vat_rate', 'vat_amount', 'gross_amount'];
+const STD_VAT = { DE: 19, AT: 20, NL: 21, FR: 20, IT: 22, ES: 21, PL: 23, BE: 21, DK: 25, SE: 25, FI: 25.5, IE: 23, PT: 23, CZ: 21, LU: 17, GR: 24, GB: 20, CH: 8.1 };
+const EU_C = new Set(['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE']);
+const numOf = (v) => { let t = String(v ?? '').replace(/[^\d,.-]/g, ''); if (!t) return null; if (t.includes(',') && (!t.includes('.') || t.lastIndexOf(',') > t.lastIndexOf('.'))) t = t.replace(/\./g, '').replace(',', '.'); else t = t.replace(/,/g, ''); const n = Number(t); return Number.isFinite(n) ? n : null; };
+const r2 = (n) => Math.round(n * 100) / 100;
 const FIELDS = ['supplier_name', 'supplier_vat_id', 'invoice_number', 'invoice_date', 'due_date', 'currency', 'po_number', 'net_amount', 'vat_rate', 'vat_amount', 'gross_amount', 'related_invoice'];
 const FI = { supplier_name: 'building', supplier_vat_id: 'id', invoice_number: 'hash', invoice_date: 'cal', due_date: 'clock', currency: 'globe', po_number: 'po', net_amount: 'euro', vat_rate: 'pct', vat_amount: 'euro', gross_amount: 'euro', related_invoice: 'link' };
 const dv = (k, v) => (v && /_date$/.test(k) && /^\d{4}-\d{2}-\d{2}T/.test(v)) ? v.slice(0, 10) : (v ?? '');
@@ -155,7 +162,7 @@ async function doc(id) {
         ${breakdown(d.net_amount, d.vat_amount, d.gross_amount, d.currency)}
         ${d.injection_flag ? `<div class="check danger" style="margin:0 0 14px">${I.shield}<div>${T('suspicious')}</div></div>` : ''}
         <form id="f"><div class="field"><label>${I.type}${T('type')}</label><select name="doc_type" ${editable ? '' : 'disabled'}><option value="invoice" ${d.doc_type === 'invoice' ? 'selected' : ''}>${T('doc_type.invoice')}</option><option value="credit_note" ${d.doc_type === 'credit_note' ? 'selected' : ''}>${T('doc_type.credit_note')}</option></select></div>
-        ${FIELDS.map((k) => `<div class="field ${editable && bad.has(k) ? 'bad' : ''}"><label>${I[FI[k]]}${T('f.' + k)}</label><input name="${k}" value="${esc(dv(k, d[k]))}" ${editable ? '' : 'disabled'}></div>`).join('')}</form>
+        ${FIELDS.map((k) => `<div class="field ${editable && bad.has(k) ? 'bad' : ''}"><label>${I[FI[k]]}${T('f.' + k)}${editable && AMT.includes(k) ? `<button type="button" class="lk" data-k="${k}" title="${T('unlock')}" hidden>${I.lock}</button>` : ''}</label><input name="${k}" value="${esc(dv(k, d[k]))}" ${editable ? '' : 'disabled'}>${k === 'gross_amount' ? '<div class="fxline" id="fx"></div>' : k === 'vat_rate' ? '<div class="fxline" id="vathint"></div>' : ''}</div>`).join('')}</form>
         ${items.length ? `<h2 style="margin-top:22px">${I.list}${T('line_items')}</h2><table class="items">${items.map((it) => `<tr><td>${esc(it.description)}</td><td class="dim">${esc(it.quantity || '')}</td><td class="num">${amt(it.amount, d.currency)}</td></tr>`).join('')}</table>` : ''}
         <div id="check" class="check"></div>
         <div class="actions">${editable ? `<button class="btn primary" id="approve">${I.check}${T('approve')}</button><button class="btn" id="save">${T('save')}</button><button class="btn quiet" id="reject">${T('reject')}</button><span class="hint" id="hint"></span>` : ''}${canReopen ? `<button class="btn" id="reopen">${T('reopen')}</button>` : ''}</div><div id="inline"></div></div>
@@ -184,27 +191,48 @@ async function doc(id) {
       ${blockers.length ? `<b>${T('must_fix')}</b><ul>${li(blockers)}</ul>` : ''}${accept.length ? `<b>${T('to_accept')}</b><ul>${li(accept)}</ul>` : ''}
       ${r.needsLead ? T('needs_lead', { limit: CFG.clerkLimit.toLocaleString(locale()) }) : ''}${r.warnings?.length ? `<small>${r.warnings.map((x) => esc(tReason(x))).join(' · ')}</small>` : ''}</div>`;
     const ap = document.getElementById('approve'), hint = document.getElementById('hint'); if (!ap) return;
-    const canGo = r.decision !== 'duplicate' && blockers.length === 0 && !r.needsLead && (ok || r.canOverride);
-    ap.disabled = !canGo; ap.dataset.issues = !ok && canGo ? '1' : '';
-    hint.textContent = r.decision === 'duplicate' ? T('hint_dup') : blockers.length ? T('hint_fix') : r.needsLead ? T('needs_lead', { limit: CFG.clerkLimit.toLocaleString(locale()) }) : !ok && !r.canOverride ? T('hint_lead') : !ok ? T('hint_accept') : '';
+    const canGo = r.decision !== 'duplicate' && !r.needsLead && (ok || r.canOverride || r.canForce);
+    ap.disabled = !canGo; ap.dataset.issues = !ok && canGo ? (blockers.length ? 'force' : 'accept') : '';
+    hint.textContent = r.decision === 'duplicate' ? T('hint_dup') : blockers.length ? (r.canForce ? T('hint_force') : T('hint_fix')) : r.needsLead ? T('needs_lead', { limit: CFG.clerkLimit.toLocaleString(locale()) }) : !ok && !r.canOverride ? T('hint_lead') : !ok ? T('hint_accept') : '';
   };
-  if (!editable) check.style.display = 'none'; else { await runCheck(); form.oninput = () => runCheck(); }
-  const decide = async (action, note) => { try { const r = await api(`/api/documents/${id}/decision`, { method: 'POST', body: { action, note, fields: fieldsOf() } }); toast(r.message || T('done')); doc(id); } catch (e) { toast((e.data?.reasons ? e.data.reasons.map(tReason).join(' ') : e.message), true); } };
+  // auto-calc, locks, country VAT hint, ECB rate
+  const locked = new Set(); const el = (k) => form.elements[k]; const put = (k, n) => { if (!locked.has(k) && n !== null) el(k).value = r2(n).toFixed(2); };
+  const recalc = (from) => { const g = numOf(el('gross_amount').value), n = numOf(el('net_amount').value), v = numOf(el('vat_amount').value), r = numOf(el('vat_rate').value);
+    if ((from === 'gross_amount' || from === 'vat_rate') && g !== null && r !== null) { const net = r2(g / (1 + r / 100)); put('net_amount', net); put('vat_amount', g - net); if (locked.has('net_amount') && !locked.has('vat_amount') && n !== null) put('vat_amount', g - n); }
+    else if (from === 'net_amount' && n !== null) { const vat = r !== null ? r2(n * r / 100) : v; if (r !== null) put('vat_amount', vat); if (vat !== null) put('gross_amount', n + vat); }
+    else if (from === 'vat_amount' && v !== null) { if (n !== null && !locked.has('gross_amount')) put('gross_amount', n + v); else if (g !== null) put('net_amount', g - v); } };
+  const showLocks = () => form.querySelectorAll('.lk').forEach((b) => (b.hidden = !locked.has(b.dataset.k)));
+  form.querySelectorAll('.lk').forEach((b) => (b.onclick = () => { locked.delete(b.dataset.k); showLocks(); recalc('gross_amount'); runCheck(); }));
+  const country = () => { const m = String(el('supplier_vat_id').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').match(/^([A-Z]{2})/); return m ? (m[1] === 'EL' ? 'GR' : m[1]) : null; };
+  const vatHint = (apply) => { const c = country(), h = document.getElementById('vathint'); if (!h) return; if (!c || !(c in STD_VAT)) { h.textContent = ''; return; }
+    const rc = c !== 'DE' && EU_C.has(c); h.textContent = rc ? T('vat_rc', { c }) : T('vat_std', { c, r: STD_VAT[c] });
+    if (apply && !locked.has('vat_rate')) { el('vat_rate').value = rc ? '0' : String(STD_VAT[c]); recalc('vat_rate'); } };
+  let fx = null; const fxNote = () => fx && numOf(el('gross_amount').value) !== null ? `FX ${fx.source} ${fx.rate} (${fx.date}): ${fx.currency} ${numOf(el('gross_amount').value)} ≈ EUR ${r2(numOf(el('gross_amount').value) * fx.rate).toFixed(2)}` : '';
+  const fxShow = async () => { const cur = String(el('currency').value || '').toUpperCase().trim(), box = document.getElementById('fx'); if (!box) return; if (!/^[A-Z]{3}$/.test(cur) || cur === 'EUR') { fx = null; box.textContent = ''; return; }
+    if (!fx || fx.currency !== cur) { try { fx = await api('/api/fx?currency=' + cur); } catch { fx = null; box.textContent = T('fx_down'); return; } }
+    const g = numOf(el('gross_amount').value); box.textContent = g === null ? '' : T('fx_line', { eur: fmt.money(g * fx.rate, 'EUR'), rate: fx.rate, date: fx.date }); };
+  if (!editable) check.style.display = 'none';
+  else { await runCheck(); vatHint(false); fxShow();
+    form.oninput = (e) => { const k = e.target.name; if (AMT.includes(k)) { locked.add(k); showLocks(); recalc(k); } if (k === 'supplier_vat_id') vatHint(true); if (AMT.includes(k) || k === 'currency' || k === 'supplier_vat_id') fxShow(); runCheck(); }; }
+  const decide = async (action, note, force) => { try { const r = await api(`/api/documents/${id}/decision`, { method: 'POST', body: { action, note: [note, action === 'approve' ? fxNote() : ''].filter(Boolean).join(' | ') || undefined, force: !!force, fields: fieldsOf() } }); toast(r.message || T('done')); doc(id); } catch (e) { toast((e.data?.reasons ? e.data.reasons.map(tReason).join(' ') : e.message), true); } };
   const ask = (label, onYes, withText, ph) => { inline.innerHTML = `<div class="inline">${withText ? `<input id="why" placeholder="${ph || T('reject_why')}">` : `<span>${label}</span>`}<button class="btn dark" id="yes">${T('confirm')}</button><button class="btn ghost" id="no">${T('cancel')}</button></div>`; document.getElementById('yes').onclick = () => { const v = withText ? document.getElementById('why').value.trim() : null; if (withText && !v) return; onYes(v); }; document.getElementById('no').onclick = () => (inline.innerHTML = ''); if (withText) document.getElementById('why').focus(); };
-  const acceptPopup = (r, onYes) => {
-    const box = document.createElement('div'); box.className = 'modal';
-    const issues = (r.reasons || []).filter((x) => !(r.blockers || []).includes(x));
-    box.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><h3>${I.alert}${T('popup_title')}</h3><p>${T('popup_sub')}</p><ul>${issues.map((x) => `<li>${esc(tReason(x))}</li>`).join('')}</ul>
+  const acceptPopup = (r, force, onYes) => {
+    const box = document.createElement('div'); box.className = 'modal' + (force ? ' force' : '');
+    const issues = (r.reasons || []).filter((x) => !(r.blockers || []).includes(x)); const word = T('force_word');
+    box.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><h3>${I.alert}${force ? T('force_title') : T('popup_title')}</h3><p>${force ? T('force_sub') : T('popup_sub')}</p>
+      ${force ? `<ul class="red">${(r.blockers || []).map((x) => `<li>${esc(tReason(x))}</li>`).join('')}</ul>` : ''}<ul>${issues.map((x) => `<li>${esc(tReason(x))}</li>`).join('')}</ul>
       <div class="sumrow"><span>${T('f.gross_amount')}</span><b>${fmt.money(r.normalized?.gross_amount, r.normalized?.currency)}</b></div>
-      <textarea id="pnote" rows="3" placeholder="${T('override_note')}"></textarea><div class="err" id="perr"></div>
-      <div class="row"><button class="btn ghost" id="pno">${T('cancel')}</button><button class="btn primary" id="pyes">${I.check}${T('approve_exception')}</button></div></div>`;
+      ${fxNote() ? `<div class="sumrow"><span>ECB</span><b>${esc(fxNote().split(': ')[1] || '')}</b></div>` : ''}
+      <textarea id="pnote" rows="3" placeholder="${T('override_note')}"></textarea>${force ? `<input id="pword" placeholder="${T('force_type', { w: word })}" autocomplete="off">` : ''}<div class="err" id="perr"></div>
+      <div class="row"><button class="btn ghost" id="pno">${T('cancel')}</button><button class="btn ${force ? 'danger' : 'primary'}" id="pyes">${I.check}${force ? T('force_btn') : T('approve_exception')}</button></div></div>`;
     document.body.appendChild(box); const close = () => box.remove(); box.querySelector('#pnote').focus();
     box.onclick = (e) => { if (e.target === box) close(); }; box.querySelector('#pno').onclick = close;
-    box.querySelector('#pyes').onclick = () => { const v = box.querySelector('#pnote').value.trim(); if (v.length < 5) { box.querySelector('#perr').textContent = T('popup_need_note'); return; } close(); onYes(v); };
+    box.querySelector('#pyes').onclick = () => { const v = box.querySelector('#pnote').value.trim(); if (v.length < 5) { box.querySelector('#perr').textContent = T('popup_need_note'); return; }
+      if (force && box.querySelector('#pword').value.trim().toUpperCase() !== word) { box.querySelector('#perr').textContent = T('force_type', { w: word }); return; } close(); onYes(v); };
     document.addEventListener('keydown', function esc_(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc_); } });
   };
   const on = (idd, fn) => { const el = document.getElementById(idd); if (el) el.onclick = fn; };
-  on('approve', () => { if (document.getElementById('approve').dataset.issues) return acceptPopup(last, (note) => decide('approve', note)); const g = last?.normalized?.gross_amount; if (Math.abs(Number(g || 0)) >= 2000) ask(T('confirm_approve', { amount: fmt.money(g, last?.normalized?.currency) }), () => decide('approve')); else decide('approve'); });
+  on('approve', () => { const mode = document.getElementById('approve').dataset.issues; if (mode) return acceptPopup(last, mode === 'force', (note) => decide('approve', note, mode === 'force')); const g = last?.normalized?.gross_amount; if (Math.abs(Number(g || 0)) >= 2000) ask(T('confirm_approve', { amount: fmt.money(g, last?.normalized?.currency) }), () => decide('approve')); else decide('approve'); });
   on('save', () => decide('save')); on('reject', () => ask(null, (v) => decide('reject', v), true)); on('reopen', () => decide('reopen'));
   on('next', async () => { const n = await api(`/api/documents/${id}/next`); location.hash = n.id ? '#doc/' + n.id : '#invoices'; });
   document.onkeydown = (e) => { if (e.key === 'Escape') location.hash = '#invoices'; };

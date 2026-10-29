@@ -9,7 +9,7 @@
         "width": 900,
         "color": 7
       },
-      "id": "ed6ee2cd-f9c4-48d4-8ca2-18ba5f6d4a12",
+      "id": "5a5deead-2d62-4ad3-83d8-b2735a87b3ca",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -25,7 +25,7 @@
         "width": 280,
         "color": 5
       },
-      "id": "bbc7c363-9b98-4773-82ca-bfe4ba310f22",
+      "id": "011b1814-f031-4776-9d3f-964562b33cee",
       "name": "Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -46,7 +46,7 @@
           "forceReconnect": 5
         }
       },
-      "id": "becf8772-0a6a-4205-b3f1-4477cb86f285",
+      "id": "1396cb6d-c0ad-4d14-8db9-cfdbd04742d4",
       "name": "Invoice mailbox (IMAP)",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.2,
@@ -76,7 +76,7 @@
           "dataPropertyAttachmentsPrefixName": "attachment_"
         }
       },
-      "id": "8f02f060-5c28-41d9-aa46-042daf6a6644",
+      "id": "935ed970-f2a6-42aa-bf64-a8145840fe07",
       "name": "Invoice mailbox (Gmail)",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
@@ -90,7 +90,7 @@
       "parameters": {
         "jsCode": "// Three entry points, one shape. Attachments: XML e-invoices (XRechnung / ZUGFeRD) are read here as text; PDFs go to \"Read PDF\".\nconst IBAN_RE = /\\b[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\\b/g;\n// E-invoices (XRechnung UBL / ZUGFeRD CII): the key fields are read straight from the XML and put on top, clearly labelled.\nconst pick = (x, ...tags) => { for (const t of tags) { const m = x.match(new RegExp('<(?:\\\\w+:)?' + t + '\\\\b[^>]*>([^<]+)</')); if (m) return m[1].trim(); } return ''; };\nconst einvoice = (x) => { if (!/<(\\w+:)?(Invoice|CreditNote|CrossIndustryInvoice)\\b/.test(x)) return '';\n  const party = (x.match(/<(?:\\w+:)?(AccountingSupplierParty|SellerTradeParty)\\b[\\s\\S]*?<\\/(?:\\w+:)?\\1>/) || [''])[0];\n  const head = x.replace(/<(?:\\w+:)?(InvoiceLine|IncludedSupplyChainTradeLineItem|AccountingSupplierParty|AccountingCustomerParty|SellerTradeParty|BuyerTradeParty|OrderReference|BuyerOrderReferencedDocument)\\b[\\s\\S]*?<\\/(?:\\w+:)?\\1>/g, '');\n  return ['E-INVOICE (structured data)', 'Invoice number: ' + pick(head, 'ID'), 'Invoice date: ' + (pick(head, 'IssueDate') || pick(head, 'DateTimeString')), 'Due date: ' + pick(head, 'DueDate'),\n    'Currency: ' + pick(head, 'DocumentCurrencyCode', 'InvoiceCurrencyCode'), 'Supplier: ' + pick(party, 'RegistrationName', 'Name'), 'Supplier VAT ID: ' + pick(party, 'CompanyID'),\n    'Order reference: ' + (pick(x.match(/<(?:\\w+:)?OrderReference\\b[\\s\\S]*?<\\/(?:\\w+:)?OrderReference>/)?.[0] || '', 'ID') || pick(x, 'BuyerReference')),\n    'Net: ' + pick(head, 'TaxExclusiveAmount', 'TaxBasisTotalAmount'), 'VAT: ' + pick(head, 'TaxAmount', 'TaxTotalAmount'), 'Total payable: ' + pick(head, 'PayableAmount', 'DuePayableAmount', 'GrandTotalAmount'),\n    '--- full XML content ---'].join('\\n') + '\\n'; };\nconst xmlToText = (x) => einvoice(x) + x.replace(/<\\?xml[^>]*>/g, '').replace(/<([\\w:.-]+)[^>]*>([^<]{1,200})<\\/\\1>/g, (_, t, v) => `${t.split(':').pop()}: ${v.trim()}\\n`).replace(/<[^>]+>/g, ' ').replace(/[ \\t]+/g, ' ').replace(/\\n\\s*\\n+/g, '\\n').trim();\nconst out = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const it = items[i]; const j = it.json;\n  const e = j.body && typeof j.body === 'object' && (j.body.id || j.body.message_id) ? j.body : j;   // webhook | reprocess | IMAP | Gmail\n  const from = (e.from && e.from.value && e.from.value[0] && e.from.value[0].address) || (e.from && e.from.text) || (typeof e.from === 'string' ? e.from : '') || e.from_addr || '';\n  let body = String(e.text || (typeof e.body === 'string' ? e.body : '') || '');\n  if (!body && e.html) body = String(e.html).replace(/<style[\\s\\S]*?<\\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');\n  const headers = JSON.stringify(e.headerLines || e.headers || '').toLowerCase();\n  const subject = String(e.subject || '');\n  // attachments (IMAP binary) or stored attachment texts (reprocess)\n  const attachments = Array.isArray(e.attachments) && e.attachments.length && e.attachments[0].kind ? e.attachments : [];\n  let pdf_key = null, pdf_name = null, pdf_count = 0; const files = [];\n  for (const [k, b] of Object.entries(it.binary || {})) {\n    const name = b.fileName || k, mime = (b.mimeType || '').toLowerCase();\n    if (/pdf/.test(mime) || /\\.pdf$/i.test(name)) { pdf_count++; if (!pdf_key) { pdf_key = k; pdf_name = name; } attachments.push({ name, kind: 'pdf', text: null });\n      const buf = await this.helpers.getBinaryDataBuffer(i, k); files.push({ name, mime: 'application/pdf', b64: buf.toString('base64') }); }\n    else if (/xml/.test(mime) || /\\.xml$/i.test(name)) { const buf = await this.helpers.getBinaryDataBuffer(i, k); attachments.push({ name, kind: 'xml', text: xmlToText(buf.toString('utf8')).slice(0, 20000) }); files.push({ name, mime: 'application/xml', b64: buf.toString('base64') }); }\n    else if (!/^image\\/(png|gif|jpe?g)$/.test(mime) || (b.fileSize && parseInt(b.fileSize) > 50000)) attachments.push({ name, kind: 'other', text: null });   // small inline images = signatures\n  }\n  // newest message only: drop quoted (\"> \") lines and Outlook \"-----Original-----\" / \"Von:\" history\n  const lines = body.split(/\\r?\\n/); const cut = lines.findIndex((l) => /^-{2,}\\s*(original|ursprüngliche) (message|nachricht)/i.test(l) || /^(Von|From):\\s.+\\s(Gesendet|Sent):/i.test(l));\n  const main = (cut > 0 ? lines.slice(0, cut) : lines).filter((l) => !/^\\s*>/.test(l)).join('\\n').trim();\n  const forwarded = /^-{3,}\\s*(forwarded message|weitergeleitete nachricht)|^(Fwd?|WG):/im.test(body) || /^(Fwd?|WG|AW|RE):/i.test(subject) && /forwarded|weitergeleitet/i.test(body);\n  const auto_reply = /auto-submitted: auto-|x-autoreply|x-autorespond|precedence: (auto_reply|bulk|junk)/.test(headers) || /mailer-daemon|postmaster@/i.test(from)\n    || /^(automatic reply|auto(matische)? ?(antwort|reply)|abwesenheitsnotiz|out of (the )?office|undeliverable|unzustellbar|delivery status notification|returned mail)/i.test(subject);\n  let h = 2166136261; for (const ch of body) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }\n  out.push({ json: {\n    message_id: String(e.messageId || (e.headers && (e.headers['message-id'] || e.headers['Message-ID'])) || e.message_id || e.id || ('gen-' + h.toString(16))).replace(/^<|>$/g, ''),\n    received_at: e.date || e.received_at || new Date().toISOString(),\n    from_addr: from, sender_domain: (from.split('@')[1] || '').toLowerCase().replace(/>$/, ''), subject, body, main_text: main,\n    forwarded, auto_reply, attachments, files, gmail_id: e.threadId ? e.id : null, pdf_key, pdf_name, pdf_count, body_hash: h.toString(16),\n    meta: { sender_domain: (from.split('@')[1] || '').toLowerCase().replace(/>$/, ''), main_text: main, forwarded, auto_reply, gmail_id: e.threadId ? e.id : null },\n  }, binary: it.binary, pairedItem: { item: i } });\n}\nreturn out;"
       },
-      "id": "7e8c040b-bb0d-4342-842b-364e0c28cb45",
+      "id": "dcdd73cf-9982-4be5-8312-a8223000efaa",
       "name": "Parse email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -107,7 +107,7 @@
           "queryReplacement": "={{ [ $json.message_id, $json.received_at, $json.from_addr, $json.subject, $json.body, $json.body_hash, JSON.stringify($json.attachments), JSON.stringify($json.meta) ] }}"
         }
       },
-      "id": "09574bd8-a022-4803-91c3-ef59600b81a3",
+      "id": "7c600e43-75a3-4064-84dd-e11025f75190",
       "name": "Store email",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -128,7 +128,7 @@
           "queryReplacement": "={{ [ $('Parse email').item.json.message_id, JSON.stringify($('Parse email').item.json.files || []) ] }}"
         }
       },
-      "id": "c2695312-2728-4aa4-ab15-2ad653adcf19",
+      "id": "0f927a00-ee14-4b6d-84f6-81a936bf3640",
       "name": "Store attachment files",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -145,7 +145,7 @@
       "parameters": {
         "jsCode": "// The mailbox marks mail as read on fetch, so every email is stored before anything that can fail.\n// From here a crash is recovered by Monitoring (re-runs stored emails that have no result).\nreturn $('Parse email').all().map((it) => ({ json: { ...it.json, files: undefined }, binary: it.binary }));"
       },
-      "id": "d429c652-8706-4247-b2ce-a783a6cfe048",
+      "id": "2d1753e6-bbc0-4d19-ba14-a6d71ed99835",
       "name": "Hand over (with attachments)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -166,7 +166,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "d40d66f1-ae20-4762-b2b0-17e3a7f00bd3",
+      "id": "25d8ddaa-bc34-4035-aa7c-d83c25b311f4",
       "name": "Process each email",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -187,7 +187,7 @@
           },
           "conditions": [
             {
-              "id": "959f6b0f-306a-4f70-8fb3-61151ad1dc96",
+              "id": "61d56469-d5b6-4064-a461-9cc72972ee76",
               "leftValue": "={{ !!$json.gmail_id }}",
               "rightValue": true,
               "operator": {
@@ -201,7 +201,7 @@
         },
         "options": {}
       },
-      "id": "f1a3be27-d94d-4545-8a38-e81ea817ef90",
+      "id": "0a7665dc-7570-4c35-9029-b04518488908",
       "name": "From Gmail?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -216,7 +216,7 @@
         "operation": "getAll",
         "returnAll": true
       },
-      "id": "4209b5ad-0a69-4d90-8c5a-188eb704019c",
+      "id": "86a1e791-acac-4735-92f4-1adf77d7d814",
       "name": "Gmail: labels",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
@@ -234,7 +234,7 @@
       "parameters": {
         "jsCode": "// The 'Processed' label is the done-marker the Gmail query excludes. Create it once in the mailbox.\nconst l = $input.all().find((i) => i.json.name === 'Processed');\nif (!l) throw new Error(\"Gmail label 'Processed' is missing. Create it once in the invoice mailbox.\");\nreturn $('From Gmail?').all().map((e) => ({ json: { label_id: l.json.id, gmail_id: e.json.gmail_id } }));"
       },
-      "id": "f03715a9-28b0-43c1-b4be-4b8c45a5e925",
+      "id": "e6d3cec7-61ce-4645-88f5-2f149ffe344c",
       "name": "Processed label",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -250,7 +250,7 @@
         "messageId": "={{ $json.gmail_id }}",
         "labelIds": "={{ [$json.label_id] }}"
       },
-      "id": "001e0d63-fbca-442d-8896-d7043b26546a",
+      "id": "8191b9eb-f400-4818-bd19-2116c78d89f7",
       "name": "Gmail: mark Processed",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,

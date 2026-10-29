@@ -119,6 +119,16 @@ app.get('/api/documents/:id', authed(), wrap(async (req, res) => {
   res.json({ ...r.rows[0], audit: audit.rows });
 }));
 
+// Today's ECB exchange rate (via frankfurter.app, official ECB reference rates, no key). Cached per currency for an hour.
+const fxCache = new Map();
+app.get('/api/fx', authed(), wrap(async (req, res) => {
+  const cur = String(req.query.currency || '').toUpperCase(); if (!/^[A-Z]{3}$/.test(cur) || cur === 'EUR') return res.status(400).json({ error: 'currency' });
+  const hit = fxCache.get(cur); if (hit && Date.now() - hit.at < 3600_000) return res.json(hit.v);
+  try { const r = await fetch(`https://api.frankfurter.app/latest?from=${cur}&to=EUR`, { signal: AbortSignal.timeout(8000) }); const j = await r.json(); if (!j.rates?.EUR) throw new Error('no rate');
+    const v = { currency: cur, rate: j.rates.EUR, date: j.date, source: 'ECB' }; fxCache.set(cur, { at: Date.now(), v }); res.json(v); }
+  catch { res.status(503).json({ error: 'Exchange rate service not reachable' }); }
+}));
+
 // The original PDF behind a document (the attachment it was read from, else the email's first PDF). Signed-in users only.
 app.get('/api/documents/:id/file', authed(), wrap(async (req, res) => {
   if (!/^[0-9a-f-]{36}$/.test(req.params.id)) return res.status(404).json({ error: 'Not found' });
@@ -134,13 +144,14 @@ app.post('/api/validate', authed(), wrap(async (req, res) => {
   const r = validateInvoice(fields || {}, { existing: ex.rows, today: new Date().toISOString().slice(0, 10) });
   if (r.decision === 'auto_book' && req.user.role === 'clerk' && Math.abs(Number(r.normalized.gross_amount || 0)) > CLERK_LIMIT) r.needsLead = true;
   r.canOverride = r.decision === 'needs_review' && r.blockers.length === 0 && req.user.role !== 'clerk';   // lead/admin may accept the remaining exceptions with a note
+  r.canForce = r.decision === 'needs_review' && r.blockers.length > 0 && req.user.role !== 'clerk';         // ... or force everything through the confirmation popup
   res.json(r);
 }));
 
 // Decisions go through n8n. Actor and role come from the verified session, never from the client.
 app.post('/api/documents/:id/decision', authed(), wrap(async (req, res) => {
-  const { action, fields, note } = req.body;
-  const body = { document_id: req.params.id, action, fields, note, actor: req.user.display_name, actor_email: req.user.email, role: req.user.role };
+  const { action, fields, note, force } = req.body;
+  const body = { document_id: req.params.id, action, fields, note, force: force === true, actor: req.user.display_name, actor_email: req.user.email, role: req.user.role };
   let r;
   try { r = await fetch(`${N8N}/review-decision`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-intake-key': N8N_KEY }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) }); }
   catch { return res.status(503).json({ ok: false, reasons: ['The booking service is not reachable right now. Nothing was changed. Try again in a minute.'] }); }
