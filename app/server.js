@@ -31,7 +31,8 @@ const allowed = (email) => (!ALLOWED_DOMAINS.length && !ALLOWED_EMAILS.length) |
 
 const app = express();
 app.set('trust proxy', 1);
-app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://www.gstatic.com'], connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com', 'https://*.firebase.com'], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ['https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:'], frameSrc: ['https://*.firebaseapp.com'] } } }));
+// CSP: Firebase's Google sign-in popup needs apis.google.com (script), accounts.google.com + the auth domain (frames).
+app.use(helmet({ contentSecurityPolicy: { directives: { defaultSrc: ["'self'"], scriptSrc: ["'self'", 'https://www.gstatic.com', 'https://apis.google.com'], connectSrc: ["'self'", 'https://*.googleapis.com', 'https://*.firebaseapp.com', 'https://*.firebase.com', 'https://accounts.google.com'], styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], fontSrc: ['https://fonts.gstatic.com'], imgSrc: ["'self'", 'data:', 'https://*.googleusercontent.com'], frameSrc: ['https://*.firebaseapp.com', 'https://accounts.google.com'] } }, crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' } }));
 app.use(express.json({ limit: '1mb' }));
 app.use(rateLimit({ windowMs: 60_000, limit: 300 }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -68,13 +69,25 @@ app.get('/api/overview', authed(), wrap(async (_req, res) => {
   res.json({ counts: Object.fromEntries(counts.rows.map((r) => [r.status, r.n])), erp: erp.rows[0], alerts: alerts.rows, lastEmail: last.rows[0].last_email });
 }));
 
+// Intake per day for the last 30 days + money in the queue. Read-only, from existing tables.
+app.get('/api/stats', authed(), wrap(async (_req, res) => {
+  const [days, money] = await Promise.all([
+    q(`select d::date as day, coalesce(n, 0)::int as n from generate_series(current_date - 29, current_date, interval '1 day') d
+       left join (select received_at::date as day, count(*) as n from inbound_emails where received_at >= current_date - 29 group by 1) x on x.day = d::date order by 1`),
+    q(`select status, coalesce(sum(gross_amount), 0)::numeric(14,2) as gross, count(*)::int as n from documents where doc_type in ('invoice', 'credit_note') group by status`),
+  ]);
+  res.json({ days: days.rows, money: Object.fromEntries(money.rows.map((r) => [r.status, { gross: Number(r.gross), n: r.n }])) });
+}));
+
 app.get('/api/documents', authed(), wrap(async (req, res) => {
   const { view = 'inbox', status, q: text, from, to, types, page = '1', sort = 'received_at', dir = 'desc' } = req.query;
   const where = [], params = [];
   const add = (sql, v) => { params.push(v); where.push(sql.replace('?', `$${params.length}`)); };
   if (view === 'inbox') where.push(`d.status in ('needs_review', 'pending_erp')`);
-  if (status) add(`d.status = ?::doc_status`, status);
-  if (types !== 'all') where.push(`d.doc_type in ('invoice', 'credit_note')`);
+  if (status === 'open') where.push(`d.status in ('needs_review', 'pending_erp')`);
+  else if (status === 'other') where.push(`d.status in ('ignored', 'duplicate')`);
+  else if (status) add(`d.status = ?::doc_status`, status);
+  if (types !== 'all' && status !== 'other') where.push(`d.doc_type in ('invoice', 'credit_note')`);
   if (text) add(`(d.supplier_name ilike ? or d.invoice_number ilike ? or e.subject ilike ? or e.from_addr ilike ?)`.replace(/\?/g, () => `$${params.length + 1}`), `%${text}%`), params.splice(params.length - 1, 1, `%${text}%`);
   if (from) add(`e.received_at >= ?::date`, from);
   if (to) add(`e.received_at < (?::date + interval '1 day')`, to);
