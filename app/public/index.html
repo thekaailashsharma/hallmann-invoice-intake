@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice intake · Hallmann</title>
+<style>
+  :root { --ink:#1d1d1f; --grey:#6e6e73; --line:#e5e5ea; --bg:#f5f5f7; --card:#fff; --blue:#0a66ff; --red:#d93025; --green:#1e8e3e; --amber:#b26a00; }
+  * { box-sizing:border-box } body { margin:0; font:15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg) }
+  header { display:flex; align-items:center; gap:16px; padding:14px 24px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5 }
+  header h1 { font-size:17px; margin:0; font-weight:600 } header .spacer { flex:1 } header select, header button { font:inherit }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#eef1f6; color:#3a3a3c }
+  .pill.needs_review { background:#fff3e0; color:var(--amber) } .pill.booked { background:#e6f4ea; color:var(--green) } .pill.pending_erp { background:#e8f0fe; color:var(--blue) }
+  .pill.rejected, .pill.duplicate { background:#fce8e6; color:var(--red) } .pill.ignored { background:#eee; color:var(--grey) }
+  .pill.erp-up { background:#e6f4ea; color:var(--green) } .pill.erp-down { background:#fce8e6; color:var(--red) }
+  main { max-width:1200px; margin:24px auto; padding:0 24px }
+  .tabs { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap } .tabs button { font:inherit; padding:8px 14px; border:1px solid var(--line); background:var(--card); border-radius:10px; cursor:pointer }
+  .tabs button.active { background:var(--ink); color:#fff; border-color:var(--ink) } .tabs .count { opacity:.7; margin-left:6px }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden }
+  th, td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top } th { font-size:12px; color:var(--grey); font-weight:600; text-transform:uppercase; letter-spacing:.04em }
+  tr.row { cursor:pointer } tr.row:hover { background:#fafafa } td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap }
+  .reasons li { margin:0 } .reasons { margin:0; padding-left:18px; color:var(--amber) } .muted { color:var(--grey); font-size:13px }
+  .detail { display:grid; grid-template-columns:1.1fr 1fr; gap:20px } @media (max-width:900px) { .detail { grid-template-columns:1fr } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px } .card h2 { margin:0 0 12px; font-size:15px }
+  pre.email { white-space:pre-wrap; font:13px/1.5 ui-monospace, Menlo, monospace; background:#fafafa; border:1px solid var(--line); border-radius:8px; padding:12px; max-height:60vh; overflow:auto }
+  .field { display:grid; grid-template-columns:150px 1fr; gap:8px; align-items:center; margin-bottom:8px } .field label { color:var(--grey); font-size:13px }
+  .field input, .field select { font:inherit; padding:7px 9px; border:1px solid var(--line); border-radius:8px; width:100% } .field input:disabled { background:#f3f3f5; color:var(--grey) }
+  .actions { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap } .btn { font:inherit; padding:9px 16px; border-radius:10px; border:1px solid var(--line); background:var(--card); cursor:pointer }
+  .btn.primary { background:var(--blue); color:#fff; border-color:var(--blue) } .btn.danger { color:var(--red) } .btn:disabled { opacity:.5; cursor:not-allowed }
+  .check { padding:10px 12px; border-radius:8px; margin-top:10px; font-size:14px } .check.ok { background:#e6f4ea; color:var(--green) } .check.bad { background:#fff3e0; color:var(--amber) }
+  .alerts { position:fixed; right:16px; bottom:16px; width:360px; max-height:40vh; overflow:auto; display:flex; flex-direction:column; gap:8px; z-index:4 }
+  .alert { background:#1d1d1f; color:#fff; padding:10px 12px; border-radius:10px; font-size:13px; display:flex; gap:10px; align-items:flex-start } .alert.critical { background:var(--red) } .alert.warning { background:var(--amber) }
+  .alert button { margin-left:auto; background:transparent; color:#fff; border:1px solid rgba(255,255,255,.5); border-radius:6px; cursor:pointer }
+  .audit li { margin-bottom:6px; font-size:13px } .audit time { color:var(--grey) } a { color:var(--blue); text-decoration:none } .flag { color:var(--red); font-weight:600 }
+  .empty { padding:40px; text-align:center; color:var(--grey); background:var(--card); border:1px dashed var(--line); border-radius:12px }
+</style>
+</head>
+<body>
+<header>
+  <h1>Invoice intake</h1>
+  <span class="muted">Hallmann Maschinenbau · invoices@hallmann</span>
+  <span class="spacer"></span>
+  <span id="erp" class="pill">ERP …</span>
+  <button id="erpToggle" class="btn" title="Demo: simulate ERP maintenance">Toggle ERP</button>
+  <label class="muted">I am <select id="actor"><option>Jana</option><option>Thomas</option><option>Sabine</option></select></label>
+  <a href="#audit">Audit log</a>
+</header>
+<main id="main"></main>
+<div id="alerts" class="alerts"></div>
+<script src="app.js"></script>
+</body>
+</html>

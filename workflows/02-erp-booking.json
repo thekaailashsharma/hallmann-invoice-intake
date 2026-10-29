@@ -1,0 +1,216 @@
+{
+  "id": "InvErpBooking0001",
+  "name": "ERP Booking",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## ERP Booking\nThe only place that writes to the ERP. Called by the intake, by the review screen and by the retry job. Checks ERP availability, books once (unique constraint), writes the audit entry. If the ERP is down the document waits in 'pending_erp' and an alert is raised.",
+        "height": 150,
+        "width": 760,
+        "color": 4
+      },
+      "id": "9d97121c-d878-4b91-90f0-a131189120de",
+      "name": "Note 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -220
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "document_id",
+              "type": "string"
+            },
+            {
+              "name": "actor",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "170c5660-4eba-4d0e-be1f-d2013c61779f",
+      "name": "Called with document_id",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select d.id, d.status, d.supplier_vat_id, d.invoice_number, s.available as erp_available, $2 as actor from documents d cross join erp_status s where d.id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [ $json.document_id, $json.actor || 'system' ] }}"
+        }
+      },
+      "id": "3006fe7d-a938-4a93-92bc-6a67e1631c99",
+      "name": "Load document + ERP status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        -120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "65dc3724-3143-43ee-a73e-e9f184ee0459",
+              "leftValue": "={{ $json.erp_available }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "df3c11a3-0312-4d41-bce9-bafb5e17a039",
+      "name": "ERP available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with src as (select * from documents where id = $1::uuid and status in ('pending_erp')), b as (insert into erp_invoices (document_id, supplier_vat_id, supplier_name, invoice_number, doc_type, invoice_date, due_date, currency, net_amount, vat_amount, gross_amount, po_number, booked_by) select id, supplier_vat_id, supplier_name, invoice_number, doc_type, invoice_date, due_date, currency, net_amount, vat_amount, gross_amount, po_number, $2 from src on conflict (supplier_vat_id, invoice_number) do nothing returning id), u as (update documents set status = case when exists (select 1 from b) then 'booked'::doc_status else 'duplicate'::doc_status end, erp_invoice_id = (select id from b), reasons = case when exists (select 1 from b) then reasons else reasons || '[\"ERP already has this supplier + invoice number.\"]'::jsonb end where id = $1::uuid and exists (select 1 from src) returning id, status, erp_invoice_id), a as (insert into audit_log (actor, action, document_id, after, note) select $2, case when u.status = 'booked' then 'erp_booked' else 'erp_rejected_duplicate' end, u.id, jsonb_build_object('status', u.status, 'erp_invoice_id', u.erp_invoice_id), case when u.status = 'booked' then 'Booked in ERP.' else 'ERP refused: duplicate.' end from u returning document_id) select coalesce((select status::text from u), 'not_pending') as status, (select erp_invoice_id from u) as erp_invoice_id, $1 as document_id",
+        "options": {
+          "queryReplacement": "={{ [ $json.id, $json.actor ] }}"
+        }
+      },
+      "id": "162b218f-986e-417c-bcd9-f49270a3fcad",
+      "name": "Book (unique per supplier + number)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        360,
+        -120
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with u as (update documents set status = 'pending_erp' where id = $1::uuid returning id), a as (insert into audit_log (actor, action, document_id, note) select $2, 'erp_unavailable', u.id, 'ERP down for maintenance. Booking queued; retried every 5 minutes.' from u returning document_id), al as (insert into alerts (severity, source, message, details) select 'warning', 'erp-booking', 'ERP unavailable; booking queued for retry', jsonb_build_object('document_id', $1) where not exists (select 1 from alerts where source = 'erp-booking' and acknowledged = false and ts > now() - interval '30 minutes') returning id) select 'pending_erp' as status, $1 as document_id",
+        "options": {
+          "queryReplacement": "={{ [ $json.id, $json.actor ] }}"
+        }
+      },
+      "id": "c2ef2c5e-b712-4ab3-8507-7b553281ea09",
+      "name": "Queue: ERP down",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        360,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with a as (insert into alerts (severity, source, message, details) values ('critical', 'erp-booking', 'ERP booking failed after retries: ' || $2, jsonb_build_object('document_id', $1)) returning id), l as (insert into audit_log (actor, action, document_id, note) values ('system', 'erp_error', $1::uuid, $2) returning id) select 'pending_erp' as status, $1 as document_id, $2 as error",
+        "options": {
+          "queryReplacement": "={{ [ $('ERP available?').item.json.id, String($json.error && $json.error.message || $json.error || 'unknown error') ] }}"
+        }
+      },
+      "id": "a67881d4-e51a-422a-bf6d-736663e88e65",
+      "name": "Alert: booking failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        600,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Called with document_id": {
+      "main": [
+        [
+          {
+            "node": "Load document + ERP status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load document + ERP status": {
+      "main": [
+        [
+          {
+            "node": "ERP available?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ERP available?": {
+      "main": [
+        [
+          {
+            "node": "Book (unique per supplier + number)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Queue: ERP down",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Book (unique per supplier + number)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Alert: booking failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "InvErrorHandler01"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

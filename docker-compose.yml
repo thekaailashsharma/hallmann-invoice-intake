@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: intake-postgres
+    environment:
+      POSTGRES_USER: intake
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-intake}
+      POSTGRES_DB: intake
+    ports: ["5433:5432"]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U intake -d intake"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: intake-n8n
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["5681:5678"]
+    environment:
+      - WEBHOOK_URL=http://localhost:5681/
+      - GENERIC_TIMEZONE=Europe/Berlin
+      - TZ=Europe/Berlin
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-change-me-please}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_SECURE_COOKIE=false
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=720
+      - EXECUTIONS_TIMEOUT=300
+      - N8N_RESTRICT_FILE_ACCESS_TO=/data
+      - SARVAM_API_KEY=${SARVAM_API_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./fixtures:/data:ro
+    restart: unless-stopped
+
+  review:
+    build: ./app
+    container_name: intake-review
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["3001:3001"]
+    environment:
+      - DATABASE_URL=postgres://intake:${POSTGRES_PASSWORD:-intake}@postgres:5432/intake
+      - N8N_WEBHOOK_BASE=http://n8n:5678/webhook
+      - PORT=3001
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  n8n_data:

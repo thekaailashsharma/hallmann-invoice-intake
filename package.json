@@ -1,0 +1,1 @@
+{ "name": "hallmann-invoice-intake", "private": true, "scripts": { "test": "node --test tests/*.test.js", "build": "python3 scripts/build-workflows.py", "setup": "bash scripts/setup.sh", "replay": "python3 scripts/replay.py", "e2e": "python3 scripts/e2e.py" } }

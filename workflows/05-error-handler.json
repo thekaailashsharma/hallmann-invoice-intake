@@ -1,0 +1,100 @@
+{
+  "id": "InvErrorHandler01",
+  "name": "Error Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Error handler\nEvery workflow here names this as its error workflow. A failure becomes a critical alert (visible on the review screen) and, in production, a message to Avanai on-call and Sabine before a supplier notices.",
+        "height": 140,
+        "width": 700,
+        "color": 3
+      },
+      "id": "824264bd-ca98-480c-8958-138edd030a7c",
+      "name": "Note 0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "313d8e3c-f0fa-4a1b-857a-54844d406ba8",
+      "name": "Workflow failed",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into alerts (severity, source, message, details) values ('critical', $1, $2, $3::jsonb) returning id",
+        "options": {
+          "queryReplacement": "={{ [ 'workflow:' + ($json.workflow && $json.workflow.name || 'unknown'), ($json.execution && $json.execution.error && $json.execution.error.message) || ($json.trigger && $json.trigger.error && $json.trigger.error.message) || 'Workflow failed', JSON.stringify({ execution_id: $json.execution && $json.execution.id, url: $json.execution && $json.execution.url, last_node: $json.execution && $json.execution.lastNodeExecuted, mode: $json.execution && $json.execution.mode }) ] }}"
+        }
+      },
+      "id": "93c94859-80f9-4a65-b22b-438df37ce749",
+      "name": "Record alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        -120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "oncall@avanai.example",
+        "subject": "=[Hallmann intake] {{ $('Workflow failed').item.json.workflow.name }} failed",
+        "message": "={{ JSON.stringify($('Workflow failed').item.json, null, 2) }}",
+        "options": {}
+      },
+      "id": "f2c5b911-7de9-477f-bc3d-5c38fc155887",
+      "name": "Notify on-call (prod)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        120,
+        0
+      ],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Workflow failed": {
+      "main": [
+        [
+          {
+            "node": "Record alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record alert": {
+      "main": [
+        [
+          {
+            "node": "Notify on-call (prod)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
