@@ -8,8 +8,8 @@ const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
 const load = (f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
 const validator = fs.readFileSync(path.join(__dirname, '..', 'shared', 'validate.js'), 'utf8');
 
-test('four workflows export with stable ids', () => {
-  assert.deepEqual(files, ['01-invoice-intake.json', '02-erp-booking.json', '03-review-decision.json', '04-monitoring.json']);
+test('five workflows export with stable ids', () => {
+  assert.deepEqual(files, ['01-invoice-intake.json', '02-process-email.json', '03-erp-booking.json', '04-review-decision.json', '05-monitoring.json']);
   for (const f of files) assert.match(load(f).id, /^Inv[A-Za-z0-9]{14}$/);
 });
 
@@ -29,7 +29,7 @@ test('all operational workflows route failures to the error handler', () => {
 
 test('the validator embedded in n8n is byte-identical to shared/validate.js (and to the app copy)', () => {
   const core = validator.split("if (typeof module !== 'undefined')")[0];
-  for (const f of ['01-invoice-intake.json', '03-review-decision.json']) {
+  for (const f of ['02-process-email.json', '04-review-decision.json']) {
     const code = load(f).nodes.find((n) => n.type === 'n8n-nodes-base.code' && /validateInvoice\(/.test(n.parameters.jsCode)).parameters.jsCode;
     assert.ok(code.startsWith(core), `${f}: Validate node drifted from shared/validate.js (run npm run build)`);
   }
@@ -41,7 +41,7 @@ test('ERP writes happen only in the ERP Booking workflow, and only via parameter
     const wf = load(f);
     for (const n of wf.nodes.filter((n) => n.type === 'n8n-nodes-base.postgres')) {
       const q = n.parameters.query;
-      if (/insert into erp_invoices/i.test(q)) assert.equal(f, '02-erp-booking.json', `${f}: ${n.name} writes to the ERP`);
+      if (/insert into erp_invoices/i.test(q)) assert.equal(f, '03-erp-booking.json', `${f}: ${n.name} writes to the ERP`);
       if (/\$\d/.test(q)) assert.ok(n.parameters.options.queryReplacement, `${f}: ${n.name} uses placeholders without parameters`);
       assert.doesNotMatch(q, /\{\{/, `${f}: ${n.name} interpolates expressions into SQL`);
     }

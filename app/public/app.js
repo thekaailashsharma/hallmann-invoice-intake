@@ -131,7 +131,7 @@ async function doc(id) {
   const editable = d.status === 'needs_review'; const canReopen = d.status === 'rejected' && me.role !== 'clerk'; const items = Array.isArray(d.line_items) ? d.line_items : []; const bad = BAD(d.reasons);
   main.innerHTML = `<a class="back" href="#invoices">${I.back}${T('back')}</a>
     <div class="head"><div>${pill(d.status)} <span class="pill">${T('doc_type.' + d.doc_type)}</span>${d.injection_flag ? ` <span class="pill rejected">${I.shield}${T('suspicious_short')}</span>` : ''}
-      <div class="meta"><span>${I.mail}${esc(d.from_addr)}</span><span>${I.clock}${fmt.ts(d.received_at)}</span>${d.due_date ? `<span>${I.cal}${T('f.due_date')} ${new Date(d.due_date).toLocaleDateString(locale())}</span>` : ''}${d.po_number ? `<span>${I.po}PO ${esc(d.po_number)}</span>` : ''}${d.supplier_vat_id ? `<span>${I.id}${esc(d.supplier_vat_id)}</span>` : ''}</div></div>
+      <div class="meta"><span>${I.mail}${esc(d.from_addr)}</span><span>${I.clock}${fmt.ts(d.received_at)}</span>${d.due_date ? `<span>${I.cal}${T('f.due_date')} ${new Date(d.due_date).toLocaleDateString(locale())}</span>` : ''}${d.po_number ? `<span>${I.po}PO ${esc(d.po_number)}</span>` : ''}${d.supplier_vat_id ? `<span>${I.id}${esc(d.supplier_vat_id)}</span>` : ''}${d.source && d.source !== 'email' ? `<span>${I.file}${esc(d.source)}</span>` : ''}</div></div>
       ${d.gross_amount != null ? `<div class="amt"><div class="n">${fmt.money(d.gross_amount, d.currency)}</div><div class="l">${T('f.gross_amount')}</div></div>` : ''}</div>
     <div class="split">
       <div class="card"><h2>${I.mail}${T('original')}<span class="sub">${esc(d.subject)}</span></h2><pre class="mail">${esc(d.body)}</pre></div>

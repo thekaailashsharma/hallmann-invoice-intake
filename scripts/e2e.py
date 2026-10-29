@@ -9,7 +9,7 @@ def psql(sql): return subprocess.run(["docker", "exec", "intake-postgres", "psql
 if "--keep" not in sys.argv:
     psql("set session_replication_role = replica; truncate audit_log, alerts, erp_invoices, documents, inbound_emails restart identity cascade; update erp_status set available = true, note = 'ERP online';")
     print("reset data")
-    for user in ("rechnungen@hallmann.example", "oncall@avanai.example"):   # empty the mailboxes
+    for user in ("oncall@avanai.example",):   # empty the alert inbox (the invoice mailbox is left alone: processed mail is already marked read)
         try:
             m = imaplib.IMAP4("localhost", 3143); m.login(user, os.environ.get("MAILBOX_PASSWORD", "mailbox") if user.startswith("rechnungen") else user); m.select("INBOX")
             typ, ids = m.search(None, "ALL")

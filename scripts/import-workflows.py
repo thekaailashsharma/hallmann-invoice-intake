@@ -16,7 +16,7 @@ CREDS = {  # type → (id, name, data)
     "smtp": ("IntakeSmtp0000001", "Alert mail (SMTP)", {"user": "", "password": "", "host": E("MAILBOX_HOST_FOR_N8N", "mailbox"), "port": int(E("SMTP_PORT", "3025")), "secure": False, "disableStartTls": True}),
 }
 NEEDS = {"n8n-nodes-base.postgres": "postgres", "@n8n/n8n-nodes-langchain.lmChatOpenAi": "openAiApi", "n8n-nodes-base.webhook": "httpHeaderAuth", "n8n-nodes-base.emailReadImap": "imap", "n8n-nodes-base.emailSend": "smtp"}
-PUBLISH = ["InvIntake00000001", "InvErpBooking0001", "InvReviewDecision", "InvErrorHandler01"]
+PUBLISH = ["InvIntake00000001", "InvProcessEmail01", "InvErpBooking0001", "InvReviewDecision", "InvErrorHandler01"]
 RETIRED = ["InvErpRetry000001", "InvWatchdog00001", "InvSupplierSetup"]   # merged into ERP Booking / Monitoring; supplier master is a Postgres table
 def dx(*a, **k): return subprocess.run(["docker", "exec", *a], capture_output=True, text=True, **k)
 def cp_in(obj, dest):
