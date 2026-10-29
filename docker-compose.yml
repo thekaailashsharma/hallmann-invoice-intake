@@ -44,12 +44,13 @@ services:
   review:
     build: ./app
     container_name: intake-review
+    extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       postgres: { condition: service_healthy }
     ports: ["3001:3001"]
     environment:
       - DATABASE_URL=postgres://intake:${POSTGRES_PASSWORD:-intake}@postgres:5432/intake
-      - N8N_WEBHOOK_BASE=http://n8n:5678/webhook
+      - N8N_WEBHOOK_BASE=${N8N_WEBHOOK_BASE:-http://n8n:5678/webhook}
       - PORT=3001
     restart: unless-stopped
 

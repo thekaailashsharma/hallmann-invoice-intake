@@ -9,7 +9,7 @@
         "width": 700,
         "color": 3
       },
-      "id": "824264bd-ca98-480c-8958-138edd030a7c",
+      "id": "6a058b67-bcbc-42d4-a57d-5b0ef0fbe2ea",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -20,7 +20,7 @@
     },
     {
       "parameters": {},
-      "id": "313d8e3c-f0fa-4a1b-857a-54844d406ba8",
+      "id": "4964d308-a3a4-45e1-9ada-753cd017104a",
       "name": "Workflow failed",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -37,7 +37,7 @@
           "queryReplacement": "={{ [ 'workflow:' + ($json.workflow && $json.workflow.name || 'unknown'), ($json.execution && $json.execution.error && $json.execution.error.message) || ($json.trigger && $json.trigger.error && $json.trigger.error.message) || 'Workflow failed', JSON.stringify({ execution_id: $json.execution && $json.execution.id, url: $json.execution && $json.execution.url, last_node: $json.execution && $json.execution.lastNodeExecuted, mode: $json.execution && $json.execution.mode }) ] }}"
         }
       },
-      "id": "93c94859-80f9-4a65-b22b-438df37ce749",
+      "id": "4b15dbd1-1dc9-4460-ad74-c3463f3a0db9",
       "name": "Record alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -53,7 +53,7 @@
         "message": "={{ JSON.stringify($('Workflow failed').item.json, null, 2) }}",
         "options": {}
       },
-      "id": "f2c5b911-7de9-477f-bc3d-5c38fc155887",
+      "id": "09dbfbb2-262d-4cf5-b00c-cf053dfcddde",
       "name": "Notify on-call (prod)",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,

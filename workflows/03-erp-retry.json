@@ -9,7 +9,7 @@
         "width": 620,
         "color": 4
       },
-      "id": "a2b76ed0-7c15-446d-84d0-a4f254312f03",
+      "id": "6f522593-371e-44ec-a187-1182e27962da",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -29,7 +29,7 @@
           ]
         }
       },
-      "id": "d3e06c9d-c687-482e-bb53-97b673a3a9e1",
+      "id": "2add2ed1-9eac-4194-857c-a81a9b82af0c",
       "name": "Every 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
@@ -40,7 +40,7 @@
     },
     {
       "parameters": {},
-      "id": "0ae68170-ba43-4798-8c07-3919d77d9478",
+      "id": "2150b2c7-0716-4004-b0fb-1f97ba53794c",
       "name": "Run now (manual)",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -55,7 +55,7 @@
         "query": "select d.id as document_id from documents d cross join erp_status s where d.status = 'pending_erp' and s.available order by d.created_at limit 50",
         "options": {}
       },
-      "id": "da021f50-9dd1-45f7-a83b-a2a485f10f5c",
+      "id": "5b28c645-5818-405a-85dc-7054e101952d",
       "name": "Pending bookings (ERP up)",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -104,7 +104,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "579b10a5-df9f-4552-8ad4-2616137aac56",
+      "id": "b2be6068-efe7-421f-b20f-8dc526429fdb",
       "name": "Book in ERP",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -119,7 +119,7 @@
         "query": "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and acknowledged = false and not exists (select 1 from documents where status = 'pending_erp') returning id",
         "options": {}
       },
-      "id": "4f7e14be-7dbd-4a1e-985a-4dcdccfe9cc5",
+      "id": "57a4198b-0788-4a96-9538-4b10eafefacb",
       "name": "Resolve ERP alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,

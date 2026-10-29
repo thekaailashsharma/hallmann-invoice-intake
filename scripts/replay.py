@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Replays the sample mailbox one email at a time into the intake webhook. Usage: python3 scripts/replay.py [--only msg-006]"""
+import os, pathlib as _pl
+for _l in (_pl.Path(__file__).resolve().parent.parent / ".env").read_text().splitlines() if (_pl.Path(__file__).resolve().parent.parent / ".env").exists() else []:
+    if "=" in _l and not _l.startswith("#"): os.environ.setdefault(_l.split("=", 1)[0].strip(), _l.split("=", 1)[1].strip())
 import json, pathlib, sys, time, urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-URL = "http://localhost:5681/webhook/invoice-intake"
+import os
+URL = os.environ.get("N8N_URL", "http://localhost:5681").rstrip("/") + "/webhook/invoice-intake"
 only = sys.argv[sys.argv.index("--only") + 1] if "--only" in sys.argv else None
 emails = json.loads((ROOT / "fixtures" / "sample-emails.json").read_text())["emails"]
 for e in emails:

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """End-to-end check: reset data, replay all 12 emails, compare DB state with fixtures/expected.json. Exit 1 on mismatch."""
+import os, pathlib as _pl
+for _l in (_pl.Path(__file__).resolve().parent.parent / ".env").read_text().splitlines() if (_pl.Path(__file__).resolve().parent.parent / ".env").exists() else []:
+    if "=" in _l and not _l.startswith("#"): os.environ.setdefault(_l.split("=", 1)[0].strip(), _l.split("=", 1)[1].strip())
 import json, pathlib, subprocess, sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 def psql(sql): return subprocess.run(["docker", "exec", "intake-postgres", "psql", "-U", "intake", "-d", "intake", "-At", "-c", sql], capture_output=True, text=True).stdout.strip()

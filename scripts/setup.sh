@@ -5,19 +5,20 @@ cd "$(dirname "$0")/.."
 [ -f .env ] || { echo "copy .env.example to .env and fill SARVAM_API_KEY"; exit 1; }
 set -a; . ./.env; set +a
 cp shared/validate.js app/validate.js
-docker compose up -d --build
-for i in $(seq 1 90); do curl -sf http://localhost:5681/healthz >/dev/null && break; sleep 1; done
+N8N_CONTAINER="${N8N_CONTAINER:-intake-n8n}"; N8N_URL="${N8N_URL:-http://localhost:5681}"; PG_HOST_FOR_N8N="${PG_HOST_FOR_N8N:-postgres}"; PG_PORT_FOR_N8N="${PG_PORT_FOR_N8N:-5432}"
+if [ "$N8N_CONTAINER" = "intake-n8n" ]; then docker compose up -d --build; else docker compose up -d --build postgres review; fi
+for i in $(seq 1 90); do curl -sf "$N8N_URL/healthz" >/dev/null && break; sleep 1; done
 TMP=$(mktemp -d)
 cat > "$TMP/creds.json" <<JSON
 [
- {"id":"IntakePostgres001","name":"Intake Postgres","type":"postgres","data":{"host":"postgres","port":5432,"database":"intake","user":"intake","password":"${POSTGRES_PASSWORD:-intake}","ssl":"disable","allowUnauthorizedCerts":false}},
+ {"id":"IntakePostgres001","name":"Intake Postgres","type":"postgres","data":{"host":"${PG_HOST_FOR_N8N}","port":${PG_PORT_FOR_N8N},"database":"intake","user":"intake","password":"${POSTGRES_PASSWORD:-intake}","ssl":"disable","allowUnauthorizedCerts":false}},
  {"id":"IntakeLlmOpenAi01","name":"LLM (OpenAI-compatible: Sarvam-105B)","type":"openAiApi","data":{"apiKey":"${SARVAM_API_KEY}","url":"${LLM_BASE_URL:-https://api.sarvam.ai/v1}","organizationId":"","header":false}}
 ]
 JSON
 chmod 644 "$TMP/creds.json"
-docker cp "$TMP/creds.json" intake-n8n:/tmp/creds.json
-docker exec intake-n8n n8n import:credentials --input=/tmp/creds.json | grep -i success
-docker exec -u root intake-n8n rm -f /tmp/creds.json; rm -rf "$TMP"
+docker cp "$TMP/creds.json" "$N8N_CONTAINER:/tmp/creds.json"
+docker exec "$N8N_CONTAINER" n8n import:credentials --input=/tmp/creds.json | grep -i success
+docker exec -u root "$N8N_CONTAINER" rm -f /tmp/creds.json; rm -rf "$TMP"
 python3 scripts/import-workflows.py
-echo "→ n8n:    http://localhost:5681   (create the owner account on first visit)"
+echo "→ n8n:    $N8N_URL"
 echo "→ review: http://localhost:3001"
