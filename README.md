@@ -54,6 +54,7 @@ python3 scripts/send-emails.py
 - Invoices with two VAT rates go to a person.
 - Early-payment discounts (Skonto) are not captured.
 - The manipulation check sometimes flags genuine invoices and needs tuning.
+- Better access management, audit trail & observability
 
 ## Where I used AI coding tools
 
