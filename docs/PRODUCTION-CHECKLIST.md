@@ -1,60 +1,67 @@
-# Production checklist — Hallmann invoice intake
+# Production checklist
 
-Status today: **ready for a demo and a supervised trial, not for unattended production.** Tick each item before real invoices flow. Owner: **A** = Avanai, **H** = Hallmann (IT / finance).
+Today this is ready for a demo and a supervised trial. It is not ready to run on its own with real invoices. Work through this list first. Each item names who owns it: Avanai or Hallmann.
 
-## 1. Decisions from Hallmann (before building further)
-- [ ] **H** Which ERP and version (SAP S/4HANA, Business Central, proALPHA, abas, DATEV…), and is there an API for posting supplier invoices?
-- [ ] **H** A test/sandbox ERP and a technical user for it.
-- [ ] **H** Where expense account, cost centre and tax code come from: PO three-way match, supplier default, or a person.
-- [ ] **H** What the ERP answers during maintenance (HTTP 503, timeout, or a "200 OK" maintenance page).
-- [ ] **H** Auto-book limit (today 10,000 € gross) and clerk approval limit (today 10,000 €).
-- [ ] **H** Who are clerks, leads and admins (Jana, Thomas, Sabine…), and who may force a booking.
-- [ ] **H** Retention: invoices and originals 10 years (GoBD); where the long-term archive lives.
+## Decisions from Hallmann
 
-## 2. Mailbox
-- [ ] **H** Dedicated invoice mailbox that receives nothing else; colleagues forward invoices to it.
-- [ ] **H** Credential with minimum rights: Gmail `gmail.modify` (Workspace service account approved by the admin for this one mailbox) or an M365 app credential.
-- [ ] **H** Gmail label `Processed` created once in that mailbox (Gmail only).
-- [ ] **A** Switch the intake from the test mailbox: `IMAP_ENABLED` / `GMAIL_ENABLED`, `GMAIL_QUERY`, re-run setup.
-- [ ] **A** Send 5 real test emails and see them processed end to end.
+1. Which ERP and which version, and whether it has an API for posting supplier invoices. Hallmann.
+2. A test system for the ERP, with a technical user. Hallmann.
+3. Where the expense account, cost centre and tax code come from: the purchase order, the supplier, or a person. Hallmann.
+4. What the ERP answers during maintenance. Hallmann.
+5. The limit for automatic booking and the clerk approval limit. Both are 10,000 € today. Hallmann.
+6. Who is a clerk, a lead or an admin, and who may force a booking. Hallmann.
+7. How long invoices are kept (10 years under GoBD) and where the archive lives. Hallmann.
 
-## 3. ERP connection
-- [ ] **A** Replace the mock in **ERP Booking → Send to ERP** with the real API (URL + credential); keep our document id as the idempotency key.
-- [ ] **A** Map our fields to the ERP's (vendor number from the supplier master, tax code, account/cost centre).
-- [ ] **A** Confirm a booking only counts when the ERP returns its own booking id.
-- [ ] **A** Re-run `scripts/outage-test.py` against the ERP sandbox (maintenance, duplicate, refused, booked).
+## Mailbox
 
-## 4. Supplier master
-- [ ] **A** Nightly sync from the ERP vendor master into `suppliers` (VAT ID, IBAN, sender domains, vendor number).
-- [ ] **H** Process for bank-detail changes (phone verification) — the system flags them; people must verify.
+1. A dedicated invoice mailbox that receives nothing else. Hallmann.
+2. A credential with the fewest rights possible: Gmail with `gmail.modify`, or a Microsoft 365 app credential. Hallmann.
+3. A Gmail label called "Processed", created once. Hallmann.
+4. Switch the intake from the test mailbox to the real one, and send five real test emails. Avanai.
 
-## 5. AI model and data protection
-- [ ] **A/H** EU-hosted model under a data processing agreement (Mistral, Azure OpenAI EU, Claude via Bedrock Frankfurt). Change the one OpenAI-compatible credential.
-- [ ] **A** Re-run all suites on the new model: `npm test`, `e2e.py`, `format-test.py`; compare field accuracy.
-- [ ] **H** DPO sign-off: data flows, retention (emails minimised after processing, n8n execution logs 30 days), records of processing.
+## ERP connection
 
-## 6. Hosting and security
-- [ ] **A** Server or cloud project in the EU; the whole `docker compose` stack (or managed Postgres) with pinned image versions.
-- [ ] **A** HTTPS on a Hallmann/Avanai domain for the review screen; n8n editor not public (VPN / IP allow-list).
-- [ ] **A** Secrets in a secret manager (`.env` values, ERP and mailbox credentials, webhook key); rotate every key used in the trial.
-- [ ] **A** Firebase Admin via a service account (not the CLI token used in the trial); authorized domains = production domain only.
-- [ ] **A** Database user for the app without UPDATE/DELETE on `audit_log` (append-only is enforced by trigger; the grant removes the last way around it).
-- [ ] **A** Daily Postgres backups, tested restore, and an n8n workflow + credential backup.
-- [ ] **A** n8n in queue mode with 2 workers if volume grows beyond a few hundred invoices a day.
+1. Replace the mock in ERP Booking with the real API. Keep our document id as the key that prevents double booking. Avanai.
+2. Map our fields to the ERP's fields. Avanai.
+3. Count a booking only when the ERP returns its own booking id. Avanai.
+4. Run the outage test against the ERP test system. Avanai.
 
-## 7. Operations
-- [ ] **A** Alerts to Avanai's real on-call channel (e-mail works; Teams/Slack/PagerDuty are drop-in) and a daily digest to Sabine.
-- [ ] **A** Uptime checks on the review screen, n8n and the ERP endpoint.
-- [ ] **A** Runbook: ERP down, mailbox credential expired, model provider down, "invoice missing" enquiry from a supplier.
+## Supplier list
 
-## 8. Pilot
-- [ ] **H/A** 2–4 weeks on real, anonymised invoices with auto-booking **off**: every invoice goes to review, we measure how often the system would have been right.
-- [ ] **A** Track: auto-book rate, wrong fields per 100 invoices, review time per invoice, forced bookings.
-- [ ] **H** Switch auto-booking on per supplier once the numbers are agreed.
+1. Sync the supplier list from the ERP every night: VAT ID, IBAN, sender domains, vendor number. Avanai.
+2. Agree how changed bank details are verified, for example by phone. The system flags them, a person checks them. Hallmann.
 
-## 9. Known gaps to close
-- [ ] Tune the Guardrails jailbreak threshold on real Hallmann mail (false positives on 2 of 6 official e-invoice samples).
-- [ ] Scanned PDFs: OCR.
-- [ ] Invoices with several VAT rates: VAT breakdown in the extraction.
-- [ ] Skonto terms captured for early-payment discounts.
-- [ ] Duplicate detection for suppliers without a VAT ID.
+## AI model and data protection
+
+1. Move to an AI model hosted in the EU, under a data processing agreement. Avanai and Hallmann.
+2. Run all test suites again on the new model. Avanai.
+3. Sign-off from the data protection officer. Hallmann.
+
+## Hosting and security
+
+1. A server in the EU running the whole stack, with fixed image versions. Avanai.
+2. HTTPS on a proper domain for the review screen. The n8n editor stays private. Avanai.
+3. All secrets in a secret manager, and every key from the trial replaced. Avanai.
+4. Firebase admin access through a service account, and sign-in allowed only on the production domain. Avanai.
+5. A database user for the app that cannot change the audit log. Avanai.
+6. Daily database backups, with a tested restore. Avanai.
+
+## Operations
+
+1. Alerts to Avanai's real on-call channel, and a daily summary for Sabine. Avanai.
+2. Uptime checks on the review screen, n8n and the ERP. Avanai.
+3. A short runbook for the common problems: ERP down, mailbox credential expired, AI provider down, a supplier asking about a missing invoice. Avanai.
+
+## Pilot
+
+1. Two to four weeks on real invoices with automatic booking off. Every invoice goes to a person, and we measure how often the system was right. Hallmann and Avanai.
+2. Track the automatic booking rate, wrong fields per 100 invoices, review time and forced bookings. Avanai.
+3. Switch automatic booking on, one supplier at a time. Hallmann.
+
+## Known gaps
+
+1. Scanned PDFs need OCR.
+2. Invoices with several VAT rates need a VAT breakdown.
+3. Early-payment discounts (Skonto) are not captured yet.
+4. The manipulation check needs tuning on real Hallmann mail.
+5. Duplicate checks are weaker for suppliers without a VAT ID.
