@@ -1,4 +1,4 @@
-# Take-home task: invoice intake for Hallmann Maschinenbau
+# Take-home task: Invoice intake for Hallmann Maschinenbau
 
 I built a system where invoices come in by email, clean ones are booked in the ERP on their own, and everything else goes to Jana and Thomas.
 
@@ -32,43 +32,17 @@ python3 scripts/send-emails.py
 - Every change is saved with who, when, and the values before and after.
 - When something breaks, Avanai gets an email before a supplier notices.
 
-## How I know it works
+## Future scope
 
-- 30 unit tests on the rules all pass.
-- Sabine's 12 sample emails plus 7 harder ones went through a real mailbox and all ended up in the right place.
-- 26 different invoice layouts were tested, and 25 behaved as expected.
-- I switched the ERP off mid-booking: the invoice waited and was booked once when it came back.
-- I also tested it end to end with a real Gmail account.
-
-## What I would add before this runs for a real client
-
-- Connect Hallmann's real ERP, which is a mock today.
-- Move the AI to an EU-hosted provider, since the current one is hosted in India.
-- Get a dedicated invoice mailbox from Hallmann IT.
-- Host it properly, with HTTPS and backups.
-- Sync the supplier list from the ERP every night.
-- Run a pilot on real invoices with automatic booking switched off.
-
-## What I didn't finish
-
-- Scanned PDFs still go to a person, because there is no OCR yet.
+- OCR for handwritten invoices.
 - Invoices with two VAT rates go to a person.
 - Early-payment discounts (Skonto) are not captured.
 - The manipulation check sometimes flags genuine invoices and needs tuning.
-- The live demo runs on my laptop, not on a server.
 
-## What I assumed
-
-- A few invoices arrive per hour, so they are handled one at a time.
-- Being correct matters more than being automatic.
-- Jana and Thomas are clerks, and Sabine is their lead.
-
-## What I propose next
-
-- Connect the ERP test system, the mailbox and an EU model.
-- Run a four-week pilot with automatic booking off.
-- Switch automatic booking on, one supplier at a time.
 
 ## Where I used AI coding tools
 
-- I used Claude Code to write most of the code and tests; the decisions and the testing are mine.
+- I used Claude Code & n8n MCP with Claude to write most of the code and tests; the decisions and the testing are mine.
+
+Best
+~ Kailash
