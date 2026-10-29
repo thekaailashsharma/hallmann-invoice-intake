@@ -74,8 +74,10 @@ const skeleton = () => `<table><tbody>${Array.from({ length: 6 }, () => `<tr cla
 // ── invoices: tiles + sparkline + chips + table ──
 const S = { chip: 'all', q: '', from: '', to: '', page: 1, sort: 'received_at', dir: 'desc' };
 function sparkline(days) {
-  const max = Math.max(1, ...days.map((d) => d.n)); const w = 300, h = 48, bw = w / days.length;
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${T('intake_30d')}">${days.map((d, i) => { const bh = Math.max(2, (d.n / max) * (h - 4)); return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" rx="1.5" fill="${d.n ? '#1c1c1e' : '#e8e5dc'}"><title>${new Date(d.day).toLocaleDateString(locale())}: ${d.n}</title></rect>`; }).join('')}</svg>`;
+  const max = Math.max(1, ...days.map((d) => d.n)); const w = 300, h = 44, gap = 2, bw = (w - gap * (days.length - 1)) / days.length;
+  const bars = days.map((d, i) => { const bh = d.n ? Math.max(3, (d.n / max) * (h - 6)) : 2; return `<rect x="${(i * (bw + gap)).toFixed(2)}" y="${(h - bh).toFixed(2)}" width="${bw.toFixed(2)}" height="${bh.toFixed(2)}" rx="1.5" fill="${d.n ? '#1c1c1e' : '#e8e5dc'}"><title>${new Date(d.day).toLocaleDateString(locale())}: ${d.n}</title></rect>`; }).join('');
+  const f = (x) => new Date(x).toLocaleDateString(locale(), { day: '2-digit', month: 'short' });
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${T('intake_30d')}">${bars}</svg><div class="ax"><span>${f(days[0].day)}</span><span>${days.reduce((a, d) => a + d.n, 0)} ${T('emails')}</span><span>${f(days[days.length - 1].day)}</span></div>`;
 }
 async function invoices() {
   const main = await frame('invoices', `<b>${T('invoices')}</b>`);
