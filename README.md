@@ -32,13 +32,28 @@ python3 scripts/send-emails.py
 - Every change is saved with who, when, and the values before and after.
 - When something breaks, Avanai gets an email before a supplier notices.
 
-## Future scope
+## How I know it works
+
+- 30 unit tests on the rules all pass.
+- Sabine's 12 sample emails plus 7 harder ones went through a real mailbox and all ended up in the right place.
+- 26 different invoice layouts were tested, and 25 behaved as expected.
+- I also tested it end to end with a real Gmail account.
+- Used PlayWright Smokescreen testing & n8n MCP to test multiple invoices via Claude
+
+## What I would add before this runs for a real client
+
+- Connect Hallmann's real ERP, which is a mock today.
+- Get a dedicated invoice mailbox from Hallmann IT.
+- Move the AI to an EU-hosted provider, Host it properly, with HTTPS and backups.
+- Sync the supplier list from the ERP every night. A dedicated workflow
+- Ask real invoice samples from the client, Run a pilot on real invoices with automatic booking switched off.
+
+## Future scope (What I didn't finished)
 
 - OCR for handwritten invoices.
 - Invoices with two VAT rates go to a person.
 - Early-payment discounts (Skonto) are not captured.
 - The manipulation check sometimes flags genuine invoices and needs tuning.
-
 
 ## Where I used AI coding tools
 
