@@ -22,15 +22,12 @@ python3 scripts/send-emails.py
 - Five n8n workflows: Intake, Process Email, ERP Booking, Review Decision and Monitoring.
 - The AI only reads the invoice; plain rules decide what gets booked.
 - Every amount must appear in the document and net plus VAT must equal gross, so net and gross can't be mixed up again.
-- Duplicates are caught, even when the invoice number is written differently.
-- Reminders, proformas and other emails are recorded but never booked.
 - Unknown suppliers, changed bank details and look-alike senders always go to a person.
 - Nothing above 10,000 € is booked without a person, the same limit a clerk has.
 - Every email is saved first, so nothing is lost if something breaks.
 - When the ERP is down, the invoice waits and is retried every 5 minutes, and it is never booked twice.
-- On the review screen, Jana and Thomas see the original PDF next to the fields and fix what is marked red.
+- On the review screen, you see the original PDF next to the fields and fix what is marked red.
 - Every change is saved with who, when, and the values before and after.
-- When something breaks, Avanai gets an email before a supplier notices.
 
 ## How I know it works
 
