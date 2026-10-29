@@ -53,7 +53,7 @@ Status today: **ready for a demo and a supervised trial, not for unattended prod
 - [ ] **H** Switch auto-booking on per supplier once the numbers are agreed.
 
 ## 9. Known gaps to close
-- [ ] Very long invoices (60+ lines): page-wise extraction.
+- [ ] Tune the Guardrails jailbreak threshold on real Hallmann mail (false positives on 2 of 6 official e-invoice samples).
 - [ ] Scanned PDFs: OCR.
 - [ ] Invoices with several VAT rates: VAT breakdown in the extraction.
 - [ ] Skonto terms captured for early-payment discounts.

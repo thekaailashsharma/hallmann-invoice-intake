@@ -53,7 +53,7 @@ open http://localhost:3001      # review screen        ·  n8n: http://localhost
 |---|---|
 | `npm test` (30 tests) | Validator rules incl. grounding, fraud, tax, dates, number formats; workflow structure (wiring, webhook auth, retries, no secrets in exports, validator not drifted) |
 | `scripts/e2e.py` (19 emails) | The client's 12 samples + edge cases through a **real mailbox**: duplicates, reminders, credit notes, forwards, injection, PDF-only, proforma, invoice + T&C PDF, look-alike sender, changed IBAN |
-| `scripts/format-test.py` (26 cases) | Real-world layouts: tables, two pages, two VAT rates, Skonto, US/UK/German dates, two-column, French number format, XRechnung, official ZUGFeRD and Factur-X samples, a real Hetzner invoice |
+| `scripts/format-test.py` (26 cases, 25 as expected) | Real-world layouts: tables, two pages, two VAT rates, Skonto, US/UK/German dates, two-column, French number format, XRechnung, official ZUGFeRD and Factur-X samples, a real Hetzner invoice |
 | `scripts/outage-test.py` | ERP down without notice → waits, one alert, one e-mail; ERP back → booked exactly once, alert closed |
 
 ![ERP down, then booked exactly once](docs/img/erp-down.gif)
@@ -76,7 +76,8 @@ The short version (full list in [docs/PRODUCTION-CHECKLIST.md](docs/PRODUCTION-C
 
 ## 4. What I didn't finish
 
-- **Very long invoices** (60+ lines) can still fail extraction and go to a person; needs page-wise extraction.
+- **Guardrails false positives:** the AI jailbreak check flagged 2 of 6 official e-invoice samples. Fail-safe (they go to a person), but noisy; needs tuning on real Hallmann mail.
+- **Total-only invoices** where the AI copies the total into "net" go to a person with "0% VAT without a note" instead of the clearer "only a total is shown".
 - **Scanned PDFs** (no text layer) go to a person; OCR is a go-live item.
 - **Several VAT rates on one invoice** always go to a person; no VAT breakdown yet. Skonto terms are not captured.
 - **Suppliers without a VAT ID** (outside the EU) are matched for duplicates less reliably.
