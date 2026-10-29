@@ -4,7 +4,7 @@
   "nodes": [
     {
       "parameters": {},
-      "id": "173991e7-dc78-4665-9c33-48d514f1a26a",
+      "id": "c2f4952e-7389-4083-8409-267cd8a02558",
       "name": "Workflow failed",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
@@ -21,7 +21,7 @@
           "queryReplacement": "={{ [ 'workflow:' + ($json.workflow && $json.workflow.name || 'unknown'), String(($json.execution && $json.execution.error && $json.execution.error.message) || ($json.trigger && $json.trigger.error && $json.trigger.error.message) || 'Workflow failed').slice(0, 300), JSON.stringify({ execution_id: $json.execution && $json.execution.id, url: $json.execution && $json.execution.url, last_node: $json.execution && $json.execution.lastNodeExecuted }) ] }}"
         }
       },
-      "id": "bb10e669-8f4e-4e3e-9b20-c36330d58a17",
+      "id": "1d2b3d9a-f99a-4922-9c5b-8de87f4ca8ae",
       "name": "Record failure",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -45,7 +45,7 @@
           ]
         }
       },
-      "id": "af22ad84-f9c2-4d43-b788-3b6cd9ac5ff6",
+      "id": "ae1c7f9b-9917-4a35-aa69-22d5c277993b",
       "name": "Every 15 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
@@ -56,7 +56,7 @@
     },
     {
       "parameters": {},
-      "id": "70ee12e5-95a3-4e20-b1e4-5f310a14cdab",
+      "id": "e4447481-dbb4-4747-a985-07f11822f5f3",
       "name": "Run now",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
@@ -71,7 +71,7 @@
         "query": "select e.message_id, e.from_addr, e.subject, e.body, e.received_at, e.attachments, e.meta from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '10 minutes' order by e.created_at limit 20",
         "options": {}
       },
-      "id": "634c62d7-12f5-4787-8ef3-f9506c06fd98",
+      "id": "9a955c42-97bb-4306-b56e-618601b52c32",
       "name": "Unfinished emails",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -95,7 +95,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "f7b00f37-4c45-42e4-9217-532e375f28a9",
+      "id": "0e5516b6-304e-401a-afc7-3bc329f0f171",
       "name": "Re-run Process Email",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -111,7 +111,7 @@
         "query": "select * from (select 'warning' as severity, 'ERP bookings waiting more than 2 hours' as message, count(*) as n from documents where status = 'pending_erp' and updated_at < now() - interval '2 hours' having count(*) > 0 union all select 'warning', 'Invoices waiting for review more than 2 working days', count(*) from documents where status = 'needs_review' and created_at < now() - interval '2 days' having count(*) > 0 union all select 'critical', 'Emails received but not processed after 30 minutes', count(*) from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '30 minutes' having count(*) > 0 union all select 'warning', 'No email received for 4 hours during business hours (mailbox connection?)', 0 from (select max(created_at) as m from inbound_emails) x where extract(isodow from now() at time zone 'Europe/Berlin') < 6 and extract(hour from now() at time zone 'Europe/Berlin') between 9 and 17 and (x.m is null or x.m < now() - interval '4 hours')) f",
         "options": {}
       },
-      "id": "2be2bb3b-47ba-418d-85c3-4ea9f1842b9d",
+      "id": "8a9ef673-e868-4a67-ad91-92debc4ced49",
       "name": "Health checks",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -131,7 +131,7 @@
           "queryReplacement": "={{ [ $json.severity, $json.message, $json.n ] }}"
         }
       },
-      "id": "8d7c5bc7-250d-439a-b284-4d29d2a091be",
+      "id": "793b3795-994e-4dfb-86da-31b19c65ebf8",
       "name": "Raise alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -154,7 +154,7 @@
           },
           "conditions": [
             {
-              "id": "ab09681a-cf0f-40d6-96cf-307c073f542d",
+              "id": "647951e3-a123-4805-b574-0e32d94ffef3",
               "leftValue": "={{ $json.is_new !== false }}",
               "rightValue": true,
               "operator": {
@@ -168,7 +168,7 @@
         },
         "options": {}
       },
-      "id": "fdf367c2-56b3-4cfa-b5e1-b584378720f7",
+      "id": "77802dc6-f26b-4725-9f5d-f08c0ceed2b1",
       "name": "New alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -188,7 +188,7 @@
           "appendAttribution": false
         }
       },
-      "id": "b9d70412-5dba-4b51-80e7-33f5728f8f54",
+      "id": "e66a1e3c-e92f-4d97-81d8-9754bbc8c502",
       "name": "E-mail Avanai on-call",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
@@ -203,12 +203,12 @@
     },
     {
       "parameters": {
-        "content": "![](/static/hallmann/inverrorhandler01-1.png)",
+        "content": "### 1 · Something failed\nany workflow",
         "height": 100,
-        "width": 360,
-        "color": 0
+        "width": 280,
+        "color": 5
       },
-      "id": "a4652444-dd90-4783-bfee-44be19c7ba0c",
+      "id": "05846a01-fc44-4160-a4e1-d29173348075",
       "name": "Note 10",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -219,12 +219,12 @@
     },
     {
       "parameters": {
-        "content": "![](/static/hallmann/inverrorhandler01-2.png)",
+        "content": "### 2 · Watchdog\nevery 15 minutes",
         "height": 100,
-        "width": 360,
-        "color": 0
+        "width": 280,
+        "color": 5
       },
-      "id": "8e891356-1f4a-4f76-80c1-3ab4d511d5ff",
+      "id": "11ab4d60-e376-4c0c-b670-4911127c40b9",
       "name": "Note 11",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -235,12 +235,12 @@
     },
     {
       "parameters": {
-        "content": "![](/static/hallmann/inverrorhandler01-3.png)",
+        "content": "### 3 · E-mail on-call\nnew alerts only",
         "height": 100,
-        "width": 360,
-        "color": 0
+        "width": 280,
+        "color": 5
       },
-      "id": "260bc24a-92b5-426e-b6af-78d035f9ba11",
+      "id": "3a0b1372-277e-42f3-a214-9a49aaed42fe",
       "name": "Note 12",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -251,18 +251,18 @@
     },
     {
       "parameters": {
-        "content": "![](/static/hallmann/monitoring.gif)\n## Monitoring\nSabine hears it from Avanai, not from a supplier.",
-        "height": 340,
-        "width": 800,
+        "content": "## Monitoring\n- Any workflow fails → alert\n- Every 15 min: stuck emails, old queues, quiet mailbox\n- One e-mail per problem to Avanai",
+        "height": 200,
+        "width": 560,
         "color": 7
       },
-      "id": "f8f732b5-6ed7-4c13-abb9-97926f99cacf",
+      "id": "33bb9fd4-0936-42e4-9bef-ec4f3ed8553d",
       "name": "Note 13",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -611,
-        -850
+        -690
       ]
     }
   ],

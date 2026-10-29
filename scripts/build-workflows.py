@@ -72,6 +72,7 @@ LOOK = {
      ("Watchdog", "clock", "every 15 minutes", ["Every 15 minutes", "Run now", "Unfinished emails", "Re-run Process Email", "Health checks", "Raise alert"]),
      ("E-mail on-call", "mail", "new alerts only", ["New alert?", "E-mail Avanai on-call"])]),
 }
+POINTS = {'Invoice Intake': ['Reads the invoice mailbox (IMAP or Gmail)', 'Saves every email first, so nothing is lost', 'Marks Gmail mail as Processed', 'Hands each email to Process Email'], 'Process Email': ['Reads every PDF and XML attachment', 'Guardrails check for manipulation', 'The AI reads, the rules decide', 'Clean → booked · unclear → a person'], 'ERP Booking': ['The only place that writes to the ERP', 'Never books the same invoice twice', 'ERP down → waits, retries every 5 minutes', 'Problems → one e-mail to Avanai'], 'Review Decision': ['Approve / Save / Reject from the review screen', 'Checks the role and the same rules again', 'Every change saved with before / after', 'Approved → ERP Booking'], 'Monitoring': ['Any workflow fails → alert', 'Every 15 min: stuck emails, old queues, quiet mailbox', 'One e-mail per problem to Avanai']}
 SX, SY = 1.45, 1.6
 ASSETS = ROOT / "n8n-assets"
 def chip(fname, num, title, sub):
@@ -99,9 +100,10 @@ def _decorate(self):
         pts = [pos[n] for n in names if n in pos]
         if not pts: continue
         x, y = min(p[0] for p in pts), min(p[1] for p in pts)
-        slug = f"{self.id.lower()}-{i}.png"; chip(slug, i, gname, desc)
-        self.sticky(f"![]({IMG}/{slug})", x - 30, y - 130, 360, 100, 0); tops.append(y - 130)
-    self.sticky(f"![]({IMG}/{gif})\n## {title}\n{line}", mx - 60, min(tops) - 400, 800, 340, 7)
+        self.sticky(f"### {i} · {gname}\n{desc}", x - 30, y - 130, 280, 100, 5); tops.append(y - 130)
+    pts = "\n".join(f"- {p}" for p in POINTS.get(self.name, []))
+    if self.name == "Invoice Intake": self.sticky(f"![]({IMG}/overview.gif)\n## {title}\n{pts}", mx - 60, min(tops) - 470, 800, 430, 7)
+    else: self.sticky(f"## {title}\n{pts}", mx - 60, min(tops) - 240, 560, 200, 7)
 WF.decorate = _decorate
 
 def if_node(wf, name, left, op, right, x, y, type_="boolean"):
