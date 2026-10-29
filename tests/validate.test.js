@@ -176,3 +176,10 @@ test('blockers vs. acceptable exceptions, and which fields to outline', () => {
   const ok = validateInvoice({ ...good, currency: 'USD', supplier_vat_id: '' , supplier_country: 'US', vat_rate: 0, vat_amount: '0', gross_amount: '1250.00' }, {});
   assert.equal(ok.blockers.length, 0); assert.equal(ok.overridable, true);
 });
+
+test('an unknown supplier without a VAT ID never auto-books', () => {
+  const text = 'Acme Consulting Inc, USA\nInvoice 2026-777\nNet 900.00 EUR\nVAT 0.00 EUR (reverse charge)\nTotal 900.00 EUR';
+  const r = validateInvoice({ ...good, supplier_name: 'Acme Consulting Inc', supplier_vat_id: '', supplier_country: 'US', invoice_number: '2026-777', invoice_date: '2026-10-20', po_number: '', net_amount: '900.00', vat_rate: '0', vat_amount: '0.00', gross_amount: '900.00', reverse_charge: true },
+    { emailText: text, supplierChecked: true, supplier: null, mode: 'intake', today: '2026-10-30' });
+  assert.equal(r.decision, 'needs_review'); assert.match(r.reasons.join(' '), /Unknown supplier/); assert.equal(r.overridable, true);
+});

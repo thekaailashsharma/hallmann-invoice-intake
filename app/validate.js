@@ -144,6 +144,7 @@ function validateInvoice(x, ctx = {}) {
   if (/hallmann/i.test(n.supplier_name || '')) reasons.push('Issuer looks like Hallmann itself (outgoing invoice?).');
 
   // ── supplier master (only when the caller looked the supplier up) ──
+  if (ctx.supplierChecked && !n.supplier_vat_id) reasons.push('Unknown supplier: no VAT ID to match against the supplier master. First invoices are checked by a person.');
   if (ctx.supplierChecked && n.supplier_vat_id && n.supplier_vat_id !== OWN_VAT_ID) {
     const sup = ctx.supplier;
     if (!sup) reasons.push('Unknown supplier: VAT ID is not in the supplier master. First invoices are checked by a person.');
