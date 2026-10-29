@@ -4,18 +4,18 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# ERP booking\nThe **only** place that writes to the ERP. Two ways in: right after approval, and every 5 minutes for anything still waiting (ERP maintenance). Row lock + unique key = never booked twice. After 5 failed attempts the document goes back to a person and Avanai is alerted.",
-        "height": 190,
-        "width": 760,
+        "content": "# ERP booking\nThe **only** place that talks to the ERP, in real time over its API. Two ways in: right after approval, and every 5 minutes for anything still waiting.\n**The ERP's answer decides:** accepted → booked · already there (409) → duplicate · refused (4xx) → back to a person · not answering (timeout / 503) → waits, retried · unexpected error → 3 attempts, then back to a person. Each booking carries the document id, so a retry can never book twice.",
+        "height": 210,
+        "width": 980,
         "color": 4
       },
-      "id": "ed89c30c-afee-488c-ad12-e1a3bac6d6ac",
+      "id": "21de6537-6564-4106-aadc-353cae897b3d",
       "name": "Note 0",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         -620,
-        -440
+        -520
       ]
     },
     {
@@ -34,7 +34,7 @@
           ]
         }
       },
-      "id": "f5072d75-e1f7-4569-9b2b-52e96af06fa9",
+      "id": "9da1a08a-39e5-47fe-ab31-429ed5f607fd",
       "name": "Book now (called)",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
@@ -54,38 +54,38 @@
           ]
         }
       },
-      "id": "4695fcb0-5aeb-43d3-95dc-1c94521b7d78",
+      "id": "65a26322-4bec-4b3f-9616-e654867d76ea",
       "name": "Every 5 minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.3,
       "position": [
         -580,
-        100
+        80
       ]
     },
     {
       "parameters": {},
-      "id": "85045fba-68c5-4672-a25f-7dc8f3d9900c",
+      "id": "a125a73b-5d30-4d3b-bb0a-ce7aadd78ada",
       "name": "Run now",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
         -580,
-        260
+        240
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select d.id as document_id, 'system' as actor from documents d cross join erp_status s where d.status = 'pending_erp' and s.available and d.erp_attempts < 5 order by d.created_at limit 50",
+        "query": "select id as document_id, 'system' as actor from documents where status = 'pending_erp' and erp_attempts < 3 and (booking_started_at is null or booking_started_at < now() - interval '2 minutes') order by created_at limit 50",
         "options": {}
       },
-      "id": "44b6abd2-984d-45e8-ad76-c0a6f85b15c1",
+      "id": "c0abad8b-8feb-419d-9f51-98c4e5488f37",
       "name": "Waiting bookings",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
       "position": [
-        -340,
+        -360,
         160
       ],
       "retryOnFail": true,
@@ -95,73 +95,196 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "with s as (select available from erp_status where id = 1), src as (select d.* from documents d, s where d.id = $1::uuid and d.status = 'pending_erp' and s.available for update of d skip locked), b as (insert into erp_invoices (document_id, supplier_vat_id, supplier_name, invoice_number, doc_type, invoice_date, due_date, currency, net_amount, vat_amount, gross_amount, po_number, booked_by) select id, supplier_vat_id, supplier_name, invoice_number, doc_type, invoice_date, due_date, currency, net_amount, vat_amount, gross_amount, po_number, $2 from src on conflict (supplier_vat_id, invoice_number) do nothing returning id), mine as (select e.id from erp_invoices e join src on e.supplier_vat_id = src.supplier_vat_id and e.invoice_number = src.invoice_number and e.document_id = src.id), res as (select case when exists (select 1 from b) or exists (select 1 from mine) then 'booked' else 'duplicate' end as st, coalesce((select id from b), (select id from mine)) as eid from src), u as (update documents d set status = res.st::doc_status, erp_invoice_id = res.eid, erp_attempts = d.erp_attempts + 1, last_error = null, updated_at = now(), reasons = case when res.st = 'duplicate' then d.reasons || '[\"ERP already has this supplier + invoice number.\"]'::jsonb else d.reasons end from res where d.id = $1::uuid returning d.id, d.status, d.erp_invoice_id), a as (insert into audit_log (actor, action, document_id, after, note) select $2, case when u.status = 'booked' then 'erp_booked' else 'erp_rejected_duplicate' end, u.id, jsonb_build_object('status', u.status, 'erp_invoice_id', u.erp_invoice_id), case when u.status = 'booked' then 'Booked in ERP.' else 'ERP refused: duplicate.' end from u returning 1), dn as (insert into audit_log (actor, action, document_id, note) select $2, 'erp_unavailable', $1::uuid, 'ERP not reachable. The booking waits and is retried every 5 minutes.' from s where not s.available and exists (select 1 from documents where id = $1::uuid and status = 'pending_erp') and not exists (select 1 from audit_log where document_id = $1::uuid and action = 'erp_unavailable' and ts > now() - interval '1 hour') returning 1) select coalesce((select status::text from u), case when (select available from s) then 'not_pending' else 'pending_erp' end) as status, $1 as document_id, (select available from s) as erp_available",
+        "query": "update documents set booking_started_at = now() where id = $1::uuid and status = 'pending_erp' and (booking_started_at is null or booking_started_at < now() - interval '2 minutes') returning id, supplier_vat_id, supplier_name, invoice_number, doc_type::text as doc_type, invoice_date::text as invoice_date, due_date::text as due_date, currency, net_amount, vat_amount, gross_amount, po_number, $2::text as actor",
         "options": {
           "queryReplacement": "={{ [ $json.document_id, $json.actor || 'system' ] }}"
         }
       },
-      "id": "fb96ce83-f007-4501-b8a8-d526007759e3",
-      "name": "Book (locked, once)",
+      "id": "cb3986fc-49b2-4fb2-8e44-065e6ae104d4",
+      "name": "Claim document",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
       "position": [
-        -100,
+        -140,
         0
       ],
-      "onError": "continueErrorOutput",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 4
-          },
-          "conditions": [
-            {
-              "id": "d1104757-74d6-4e5f-a031-b796f51ea7f2",
-              "leftValue": "={{ $json.erp_available }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "false",
-                "singleValue": true
-              }
+        "method": "POST",
+        "url": "http://host.docker.internal:4000/api/v1/supplier-invoices",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ external_ref: $json.id, supplier_vat_id: $json.supplier_vat_id, supplier_name: $json.supplier_name, invoice_number: $json.invoice_number, doc_type: $json.doc_type, invoice_date: $json.invoice_date, due_date: $json.due_date, currency: $json.currency, net_amount: Number($json.net_amount), vat_amount: Number($json.vat_amount), gross_amount: Number($json.gross_amount), po_number: $json.po_number, booked_by: $json.actor }) }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
             }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+          }
+        }
       },
-      "id": "8596fa95-8bc0-474c-8431-f311ffaa0567",
-      "name": "ERP down?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.4,
+      "id": "90605a7e-2575-4e12-b822-f736ff5de3c1",
+      "name": "Send to ERP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
-        140,
-        -100
+        80,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map the ERP's HTTP answer to one outcome. Network errors (no answer after 3 quick tries) arrive on the error output as 'down'.\nconst doc = $('Claim document').item.json; const code = Number($json.statusCode || 0); const body = $json.body || {};\nconst outcome = code === 200 || code === 201 ? 'booked' : code === 409 ? 'duplicate' : [400, 404, 422].includes(code) ? 'rejected' : [0, 502, 503, 504].includes(code) || !code ? 'down' : 'error';\nconst msg = outcome === 'booked' ? 'Booked in ERP.' : outcome === 'down' ? `ERP not reachable (${code || ($json.error && $json.error.message) || 'no answer'}). Waiting; retried every 5 minutes.`\n  : `ERP answered ${code}: ${typeof body === 'object' ? (body.error || JSON.stringify(body)) : String(body).slice(0, 200)}${body.fields ? ' (' + body.fields.join(', ') + ')' : ''}`;\nreturn { json: { document_id: doc.id, actor: doc.actor, outcome, erp_id: body.id || null, msg } };",
+        "mode": "runOnceForEachItem"
+      },
+      "id": "df102196-5462-4e49-8571-ab900cc96344",
+      "name": "Read ERP answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
       ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "with ex as (update alerts set occurrences = occurrences + 1, last_seen = now() where id = (select id from alerts where source = 'erp-booking' and message = 'ERP unavailable; bookings are queued and retried every 5 minutes' and not acknowledged and ts > now() - interval '24 hours' order by ts desc limit 1) returning id), ins as (insert into alerts (severity, source, message, details) select 'warning', 'erp-booking', 'ERP unavailable; bookings are queued and retried every 5 minutes', jsonb_build_object('document_id', $1)::jsonb where not exists (select 1 from ex) returning id) select (select id from ins) is not null as is_new, 'warning' as severity, 'erp-booking' as source, 'ERP unavailable; bookings are queued and retried every 5 minutes' as message",
+        "query": "with r as (select $1::uuid as id, $2::text as outcome, $3::text as erp_id, $4::text as msg, $5::text as actor), u as (update documents d set status = (case r.outcome when 'booked' then 'booked' when 'duplicate' then 'duplicate' when 'rejected' then 'needs_review' when 'error' then case when d.erp_attempts + 1 >= 3 then 'needs_review' else 'pending_erp' end else 'pending_erp' end)::doc_status, erp_invoice_id = case when r.outcome = 'booked' then r.erp_id::uuid else d.erp_invoice_id end, erp_attempts = d.erp_attempts + case when r.outcome = 'error' then 1 else 0 end, last_error = case when r.outcome = 'booked' then null else r.msg end, booking_started_at = null, updated_at = now(), reasons = case when r.outcome = 'duplicate' then d.reasons || '[\"ERP already has this supplier + invoice number.\"]'::jsonb when r.outcome = 'rejected' then d.reasons || jsonb_build_array('ERP refused the booking: ' || r.msg) when r.outcome = 'error' and d.erp_attempts + 1 >= 3 then d.reasons || jsonb_build_array('ERP booking failed 3 times: ' || r.msg || '. Check the values, then approve again.') else d.reasons end from r where d.id = r.id returning d.id, d.status), a as (insert into audit_log (actor, action, document_id, after, note) select r.actor, case r.outcome when 'booked' then 'erp_booked' when 'duplicate' then 'erp_rejected_duplicate' when 'rejected' then 'erp_rejected' when 'down' then 'erp_unavailable' else 'erp_error' end, r.id, jsonb_build_object('status', (select status from u), 'erp_invoice_id', r.erp_id), r.msg from r where r.outcome <> 'down' or not exists (select 1 from audit_log where document_id = r.id and action = 'erp_unavailable' and ts > now() - interval '1 hour') returning 1), s as (update erp_status set available = (r.outcome <> 'down'), note = case when r.outcome = 'down' then 'ERP not reachable at last booking attempt' else 'ERP answering' end, updated_at = now() from r where erp_status.id = 1 returning 1) select u.id as document_id, u.status::text as status, r.outcome, r.msg, (u.status = 'needs_review' and r.outcome in ('error', 'rejected')) as handed_back from u, r",
         "options": {
-          "queryReplacement": "={{ [ $json.document_id ] }}"
+          "queryReplacement": "={{ [ $json.document_id, $json.outcome, $json.erp_id, $json.msg, $json.actor ] }}"
         }
       },
-      "id": "7ea7fd1a-0dc8-4452-8695-35f0eaa7cf44",
-      "name": "Alert: ERP down",
+      "id": "6e2976e9-66bc-4b01-8689-67022a9b10e9",
+      "name": "Record result",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
       "position": [
-        380,
-        -200
+        520,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1d1159b5-2fa6-45ae-8c85-bd663348b10d",
+                    "leftValue": "={{ $json.outcome === 'down' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ERP down"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "747be3dd-15c6-4c78-b1fd-13775315a702",
+                    "leftValue": "={{ $json.handed_back }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Handed back"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2d078389-b6d8-4384-8b54-66b831ef9f48",
+                    "leftValue": "={{ $json.outcome === 'booked' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Booked"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "70f1b012-b279-4922-b574-81f09933158f",
+      "name": "What next?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with ex as (update alerts set occurrences = occurrences + 1, last_seen = now() where id = (select id from alerts where source = 'erp-booking' and message = $2 and not acknowledged and ts > now() - interval '24 hours' order by ts desc limit 1) returning id), ins as (insert into alerts (severity, source, message, details) select $1, 'erp-booking', $2, jsonb_build_object('document_id', $3, 'detail', $4)::jsonb where not exists (select 1 from ex) returning id) select (select id from ins) is not null as is_new, $1 as severity, 'erp-booking' as source, $2 as message",
+        "options": {
+          "queryReplacement": "={{ [ $json.outcome === 'down' ? 'warning' : 'critical', $json.outcome === 'down' ? 'ERP not reachable; bookings wait and are retried every 5 minutes' : 'ERP booking returned to review: ' + ($json.outcome === 'rejected' ? 'ERP refused it' : 'failed 3 times'), $json.document_id, $json.msg ] }}"
+        }
+      },
+      "id": "9d323668-5b1c-4de4-81da-80ece58e7770",
+      "name": "Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.8,
+      "position": [
+        980,
+        -100
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -170,16 +293,16 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and not acknowledged and (select available from erp_status where id = 1) and not exists (select 1 from documents where status = 'pending_erp') returning id",
+        "query": "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and not acknowledged returning id",
         "options": {}
       },
-      "id": "21e777e6-5412-4e62-8899-9102b85ababb",
-      "name": "Close ERP alert when clear",
+      "id": "e21947c0-7e0f-4171-bce6-df8bd17a84a0",
+      "name": "Close ERP-down alert",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
       "position": [
-        380,
-        0
+        980,
+        120
       ],
       "alwaysOutputData": true,
       "executeOnce": true,
@@ -189,46 +312,6 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "with u as (update documents set erp_attempts = erp_attempts + 1, last_error = $2, status = case when erp_attempts + 1 >= 5 then 'needs_review'::doc_status else status end, reasons = case when erp_attempts + 1 >= 5 then reasons || jsonb_build_array('ERP booking failed 5 times: ' || $2 || '. Check the values, then approve again.') else reasons end where id = $1::uuid returning id, erp_attempts, status), l as (insert into audit_log (actor, action, document_id, note) select 'system', 'erp_error', u.id, 'Attempt ' || u.erp_attempts || ': ' || $2 from u returning 1) select u.erp_attempts >= 5 as parked, $1 as document_id, $2 as error from u",
-        "options": {
-          "queryReplacement": "={{ [ $('Book (locked, once)').item.json.document_id || $json.document_id, String(($json.error && $json.error.message) || $json.error || 'unknown error').slice(0, 300) ] }}"
-        }
-      },
-      "id": "c0985487-5193-405a-bb06-5b0129abb501",
-      "name": "Count failed attempt",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.8,
-      "position": [
-        140,
-        200
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "with ex as (update alerts set occurrences = occurrences + 1, last_seen = now() where id = (select id from alerts where source = 'erp-booking' and message = case when $2 then 'ERP booking failed 5 times; document returned to review' else 'ERP booking failed; will retry' end and not acknowledged and ts > now() - interval '24 hours' order by ts desc limit 1) returning id), ins as (insert into alerts (severity, source, message, details) select case when $2 then 'critical' else 'warning' end, 'erp-booking', case when $2 then 'ERP booking failed 5 times; document returned to review' else 'ERP booking failed; will retry' end, jsonb_build_object('document_id', $1, 'error', $3)::jsonb where not exists (select 1 from ex) returning id) select (select id from ins) is not null as is_new, case when $2 then 'critical' else 'warning' end as severity, 'erp-booking' as source, case when $2 then 'ERP booking failed 5 times; document returned to review' else 'ERP booking failed; will retry' end as message",
-        "options": {
-          "queryReplacement": "={{ [ $json.document_id, $json.parked, $json.error ] }}"
-        }
-      },
-      "id": "ae6eab32-bcfa-4978-95f3-006fff6d74e0",
-      "name": "Alert: booking failing",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.8,
-      "position": [
-        380,
-        200
-      ],
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
-      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -238,7 +321,7 @@
           },
           "conditions": [
             {
-              "id": "87a15f49-f5f9-495a-90bf-e9276cd61516",
+              "id": "d8e39c2f-2831-4444-8cdc-8379ae1ba6d9",
               "leftValue": "={{ $json.is_new }}",
               "rightValue": true,
               "operator": {
@@ -252,12 +335,12 @@
         },
         "options": {}
       },
-      "id": "64d3d38f-9eb0-4f08-ba60-6167a419320d",
+      "id": "3a214640-f044-4eac-b23c-8c109633a6c3",
       "name": "New alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
       "position": [
-        620,
+        1200,
         -100
       ]
     },
@@ -272,12 +355,12 @@
           "appendAttribution": false
         }
       },
-      "id": "669f8fc5-79e6-4624-bd5f-ef1308e2181e",
+      "id": "7c4d245e-2463-477a-a8f3-3a2418f53343",
       "name": "E-mail Avanai on-call",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        860,
+        1420,
         -100
       ],
       "retryOnFail": true,
@@ -313,7 +396,7 @@
       "main": [
         [
           {
-            "node": "Book (locked, once)",
+            "node": "Claim document",
             "type": "main",
             "index": 0
           }
@@ -324,72 +407,90 @@
       "main": [
         [
           {
-            "node": "Book (locked, once)",
+            "node": "Claim document",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Book (locked, once)": {
+    "Claim document": {
       "main": [
         [
           {
-            "node": "ERP down?",
+            "node": "Send to ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to ERP": {
+      "main": [
+        [
+          {
+            "node": "Read ERP answer",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Count failed attempt",
+            "node": "Read ERP answer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "ERP down?": {
+    "Read ERP answer": {
       "main": [
         [
           {
-            "node": "Alert: ERP down",
+            "node": "Record result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record result": {
+      "main": [
+        [
+          {
+            "node": "What next?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "What next?": {
+      "main": [
+        [
+          {
+            "node": "Alert",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Close ERP alert when clear",
+            "node": "Alert",
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "Count failed attempt": {
-      "main": [
+        ],
         [
           {
-            "node": "Alert: booking failing",
+            "node": "Close ERP-down alert",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Alert: ERP down": {
-      "main": [
-        [
-          {
-            "node": "New alert?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Alert: booking failing": {
+    "Alert": {
       "main": [
         [
           {
@@ -418,7 +519,7 @@
     "timezone": "Europe/Berlin",
     "saveDataErrorExecution": "all",
     "saveDataSuccessExecution": "all",
-    "executionTimeout": 120,
+    "executionTimeout": 180,
     "errorWorkflow": "InvErrorHandler01",
     "callerPolicy": "workflowsFromAList",
     "callerIds": "InvProcessEmail01,InvReviewDecision"

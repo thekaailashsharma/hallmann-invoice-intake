@@ -50,6 +50,18 @@ services:
       - ./fixtures:/data:ro
     restart: unless-stopped
 
+  erp:
+    # Mock ERP booking API (stands in for Hallmann's ERP). Production: n8n points at the real ERP URL instead.
+    build: ./erp-mock
+    container_name: intake-erp
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ["4000:4000"]
+    environment:
+      - DATABASE_URL=postgres://intake:${POSTGRES_PASSWORD:-intake}@postgres:5432/intake
+      - ERP_API_KEY=${ERP_API_KEY}
+    restart: unless-stopped
+
   review:
     build: ./app
     container_name: intake-review

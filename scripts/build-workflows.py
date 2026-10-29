@@ -6,6 +6,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 VALIDATE_JS = (ROOT / "shared" / "validate.js").read_text().replace("if (typeof module !== 'undefined') module.exports", "if (false) module.exports")
 IDS = {"intake": "InvIntake00000001", "process": "InvProcessEmail01", "erp": "InvErpBooking0001", "review": "InvReviewDecision", "errors": "InvErrorHandler01"}
 LLM_MODEL = "sarvam-105b-conversations"
+ENV = dict(l.split("=", 1) for l in (ROOT / ".env").read_text().splitlines() if "=" in l and not l.startswith("#")) if (ROOT / ".env").exists() else {}
 ONCALL = "oncall@avanai.example"
 BASE_SETTINGS = {"executionOrder": "v1", "saveManualExecutions": True, "timezone": "Europe/Berlin", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "executionTimeout": 300}
 
@@ -72,15 +73,15 @@ INSERT_DOC = lambda action, note: (
     f"insert into audit_log (actor, action, document_id, message_id, after, note) select 'system', '{action}', d.id, d.message_id, $18::jsonb, {note} from d returning document_id as id, (select status::text from d) as status, message_id")
 
 # ═══════════════════════════════════ 1 · INVOICE INTAKE (mailbox → one execution per email) ═══════════════════════════════════
+GMAIL_QUERY = ENV.get("GMAIL_QUERY", "in:inbox -label:Processed")
 A = WF("Invoice Intake", IDS["intake"], {"errorWorkflow": IDS["errors"], "executionTimeout": 1800})
-A.sticky("# Invoice intake\n**Mailbox → one execution of 'Process Email' per email.** Each email is processed on its own: its own log, failures isolated, a resend in the same batch is still caught as a duplicate.", -1000, -460, 760, 150, 7)
+A.sticky("# Invoice intake\n**Fetch → store → label → hand over.** Nothing here can fail after the mailbox marks an email as read: it is stored in Postgres first. Then each email runs on its own in 'Process Email' (own log, isolated failures; a resend in the same batch is still a duplicate). No AI here: the guardrail sits in front of the AI, on the exact text it reads, including PDFs.", -1000, -500, 900, 170, 7)
 A.sticky("**Mailbox (set up by Hallmann IT).** A dedicated invoice mailbox that receives nothing else; colleagues forward invoices there. The mailbox boundary is the access control: a token for it can never see anyone else's mail.\n\n**IMAP** works with any server (Exchange, M365, the demo mailbox). **Gmail**: credential with Custom Scopes = gmail.modify only (read + label; the workflow has no send or delete node); production: Workspace service account approved by the admin for this one mailbox. Enable Gmail, disable IMAP: same pipeline.", -1300, -280, 280, 440, 5)
 A.node("Invoice mailbox (IMAP)", "n8n-nodes-base.emailReadImap", 2.2, {"mailbox": "INBOX", "postProcessAction": "read", "format": "resolved", "dataPropertyAttachmentsPrefixName": "attachment_",
     "options": {"customEmailConfig": "[\"UNSEEN\"]", "trackLastMessageId": False, "forceReconnect": 5}}, -960, -120)
 A.node("Invoice mailbox (Gmail)", "n8n-nodes-base.gmailTrigger", 1.4, {"pollTimes": {"item": [{"mode": "everyMinute"}]}, "event": "messageReceived", "simple": False,
-    "filters": {"q": "in:inbox -label:Processed", "readStatus": "both", "includeSpamTrash": False},
+    "filters": {"q": GMAIL_QUERY, "readStatus": "both", "includeSpamTrash": False},
     "options": {"downloadAttachments": True, "dataPropertyAttachmentsPrefixName": "attachment_"}}, -960, 60, disabled=True)
-A.node("Re-run (from Monitoring)", "n8n-nodes-base.executeWorkflowTrigger", 1.1, {"inputSource": "passthrough"}, -960, 240)
 NORMALIZE = r"""// Three entry points, one shape. Attachments: XML e-invoices (XRechnung / ZUGFeRD) are read here as text; PDFs go to "Read PDF".
 const IBAN_RE = /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g;
 const xmlToText = (x) => x.replace(/<\?xml[^>]*>/g, '').replace(/<([\w:.-]+)[^>]*>([^<]{1,200})<\/\1>/g, (_, t, v) => `${t.split(':').pop()}: ${v.trim()}\n`).replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
@@ -118,17 +119,25 @@ for (let i = 0; i < items.length; i++) {
   }, binary: it.binary, pairedItem: { item: i } });
 }
 return out;"""
-A.code("Normalize", NORMALIZE, -700, 60, each=False)
-for t in ("Invoice mailbox (IMAP)", "Invoice mailbox (Gmail)", "Re-run (from Monitoring)"): A.link(t, "Normalize")
-A.pg("Store email first", "insert into inbound_emails (message_id, received_at, from_addr, subject, body, body_hash, attachments) values ($1, $2::timestamptz, $3, $4, $5, $6, $7::jsonb) on conflict (message_id) do nothing returning message_id",
-     "[ $json.message_id, $json.received_at, $json.from_addr, $json.subject, $json.body, $json.body_hash, JSON.stringify($json.attachments) ]", -460, 60, alwaysOutputData=True)
-A.code("Hand over (with attachments)", "// The mailbox marks mail as read on fetch, so every email is stored before anything else can fail.\n// From here a crash is recovered by Monitoring (re-runs stored emails that have no result).\nreturn $('Normalize').all().map((it) => ({ json: it.json, binary: it.binary }));", -240, 60, each=False)
-A.node("Process each email", "n8n-nodes-base.executeWorkflow", 1.2, {"workflowId": {"__rl": True, "mode": "id", "value": IDS["process"]}, "mode": "each", "options": {"waitForSubWorkflow": True}}, -20, 60, onError="continueRegularOutput")
-A.link("Normalize", "Store email first"); A.link("Store email first", "Hand over (with attachments)"); A.link("Hand over (with attachments)", "Process each email")
+A.code("Parse email", NORMALIZE, -700, 60, each=False)
+for t in ("Invoice mailbox (IMAP)", "Invoice mailbox (Gmail)"): A.link(t, "Parse email")
+A.pg("Store email", "insert into inbound_emails (message_id, received_at, from_addr, subject, body, body_hash, attachments, meta) values ($1, $2::timestamptz, $3, $4, $5, $6, $7::jsonb, $8::jsonb) on conflict (message_id) do nothing returning message_id",
+     "[ $json.message_id, $json.received_at, $json.from_addr, $json.subject, $json.body, $json.body_hash, JSON.stringify($json.attachments), JSON.stringify({ sender_domain: $json.sender_domain, main_text: $json.main_text, forwarded: $json.forwarded, auto_reply: $json.auto_reply, gmail_id: $json.gmail_id }) ]", -460, 60, alwaysOutputData=True)
+A.code("Hand over (with attachments)", "// The mailbox marks mail as read on fetch, so every email is stored before anything that can fail.\n// From here a crash is recovered by Monitoring (re-runs stored emails that have no result).\nreturn $('Parse email').all().map((it) => ({ json: it.json, binary: it.binary }));", -240, 60, each=False)
+A.node("Process each email", "n8n-nodes-base.executeWorkflow", 1.2, {"workflowId": {"__rl": True, "mode": "id", "value": IDS["process"]}, "mode": "each", "options": {"waitForSubWorkflow": True}}, -20, 120, onError="continueRegularOutput")
+A.link("Parse email", "Store email"); A.link("Store email", "Hand over (with attachments)"); A.link("Hand over (with attachments)", "Process each email")
+if_node(A, "From Gmail?", "={{ !!$json.gmail_id }}", "true", True, -20, -200)
+A.link("Hand over (with attachments)", "From Gmail?")
+A.node("Gmail: labels", "n8n-nodes-base.gmail", 2.1, {"resource": "label", "operation": "getAll", "returnAll": True}, 200, -260, onError="continueRegularOutput", retryOnFail=True, maxTries=3, waitBetweenTries=3000, executeOnce=True)
+A.link("From Gmail?", "Gmail: labels", 0)
+A.code("Processed label", "// The 'Processed' label is the done-marker the Gmail query excludes. Create it once in the mailbox.\nconst l = $input.all().find((i) => i.json.name === 'Processed');\nif (!l) throw new Error(\"Gmail label 'Processed' is missing. Create it once in the invoice mailbox.\");\nreturn $('From Gmail?').all().map((e) => ({ json: { label_id: l.json.id, gmail_id: e.json.gmail_id } }));", 420, -260, each=False)
+A.link("Gmail: labels", "Processed label")
+A.node("Gmail: mark Processed", "n8n-nodes-base.gmail", 2.1, {"resource": "message", "operation": "addLabels", "messageId": "={{ $json.gmail_id }}", "labelIds": "={{ [$json.label_id] }}"}, 640, -260, onError="continueRegularOutput", retryOnFail=True, maxTries=3, waitBetweenTries=3000)
+A.link("Processed label", "Gmail: mark Processed")
 A.dump("01-invoice-intake.json")
 
 # ═══════════════════════════════════ 1b · PROCESS EMAIL (one email) ═══════════════════════════════════
-P = WF("Process Email", IDS["process"], {"errorWorkflow": IDS["errors"], "executionTimeout": 900, "callerPolicy": "workflowsFromAList", "callerIds": IDS["intake"]})
+P = WF("Process Email", IDS["process"], {"errorWorkflow": IDS["errors"], "executionTimeout": 900, "callerPolicy": "workflowsFromAList", "callerIds": f"{IDS['intake']},{IDS['errors']}"})
 P.sticky("# Process one email\n**Read → store → guard → AI reads → rules decide → save → book.** The AI never decides: every value it reads must appear in the email, and a deterministic validator (unit-tested) is the only gate to the ERP. Each PDF/XML attachment is its own document; only what the AI calls an invoice or credit note is kept.", -660, -560, 900, 170, 7)
 P.node("Email in", "n8n-nodes-base.executeWorkflowTrigger", 1.1, {"inputSource": "passthrough"}, -620, 0)
 P.code("Split PDFs", r"""// One item per PDF so every PDF is read (not only the first).
@@ -141,28 +150,19 @@ P.link("Split PDFs", "PDF?")
 P.node("Read PDF", "n8n-nodes-base.extractFromFile", 1, {"operation": "pdf", "binaryPropertyName": "data", "options": {}}, 40, -120, onError="continueRegularOutput")
 P.link("PDF?", "Read PDF", 0)
 P.code("Email ready", r"""// Attachment texts in, IBANs found by regex (never by the AI), IBANs masked for the AI.
-const e = $('Email in').first().json; const IBAN_RE = /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g;
+const e0 = $('Email in').first().json; const e = { ...e0, ...(e0.meta || {}) };   // from Intake, or a stored row re-run by Monitoring
+const IBAN_RE = /\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b/g;
 const pdfText = {}; $input.all().forEach((it, i) => { const n = ($('Split PDFs').all()[i] || {}).json?.pdf_name; if (n) pdfText[n] = String(it.json.text || '').trim() || null; });
 const attachments = (e.attachments || []).map((a) => a.kind === 'pdf' && a.name in pdfText ? { ...a, text: pdfText[a.name] } : a);
 const all = [e.body, ...attachments.filter((a) => a.text).map((a) => a.text)].join('\n\n');
 const ibans = [...new Set((all.match(IBAN_RE) || []).map((x) => x.replace(/\s/g, '')).filter((x) => !/^[A-Z]{2}\d{2}0{8,}/.test(x)))];
 return [{ json: { ...e, attachments, ibans, unreadable: attachments.filter((a) => !a.text && a.kind !== 'other').map((a) => a.name).concat(attachments.filter((a) => a.kind === 'other').map((a) => a.name)) } }];""", 260, 0, each=False)
 P.link("Read PDF", "Email ready"); P.link("PDF?", "Email ready", 1)
-P.pg("Store email", "with ins as (insert into inbound_emails (message_id, received_at, from_addr, subject, body, body_hash, attachments) values ($1, $2::timestamptz, $3, $4, $5, $6, $7::jsonb) on conflict (message_id) do update set attachments = excluded.attachments returning 1) "
-     "select coalesce((select json_agg(source) from documents where message_id = $1), '[]'::json) as done_sources, $1 as message_id",
-     "[ $json.message_id, $json.received_at, $json.from_addr, $json.subject, $json.body, $json.body_hash, JSON.stringify($json.attachments) ]", 480, 0)
-P.link("Email ready", "Store email")
-if_node(P, "From Gmail?", "={{ !!$('Email ready').first().json.gmail_id }}", "true", True, 700, -300)
-P.link("Store email", "From Gmail?")
-P.node("Gmail: labels", "n8n-nodes-base.gmail", 2.1, {"resource": "label", "operation": "getAll", "returnAll": True}, 920, -360, onError="continueRegularOutput", retryOnFail=True, maxTries=3, waitBetweenTries=3000)
-P.link("From Gmail?", "Gmail: labels", 0)
-P.code("Processed label", "const l = $input.all().find((i) => i.json.name === 'Processed');\nif (!l) throw new Error(\"Gmail label 'Processed' is missing. Create it once in the invoice mailbox.\");\nreturn [{ json: { label_id: l.json.id, gmail_id: $('Email ready').first().json.gmail_id } }];", 1140, -360, each=False)
-P.link("Gmail: labels", "Processed label")
-P.node("Gmail: mark Processed", "n8n-nodes-base.gmail", 2.1, {"resource": "message", "operation": "addLabels", "messageId": "={{ $json.gmail_id }}", "labelIds": "={{ [$json.label_id] }}"}, 1360, -360, onError="continueRegularOutput", retryOnFail=True, maxTries=3, waitBetweenTries=3000)
-P.link("Processed label", "Gmail: mark Processed")
-P.sticky("**Gmail done-marker:** labelled 'Processed' once the email is safely stored in Postgres. Monitoring finishes anything that fails later.", 920, -520, 420, 110, 5)
+P.pg("Save PDF text", "update inbound_emails set attachments = $2::jsonb where message_id = $1 returning (select coalesce(json_agg(source), '[]'::json) from documents where message_id = $1) as done_sources, message_id",
+     "[ $json.message_id, JSON.stringify($json.attachments) ]", 480, 0)
+P.link("Email ready", "Save PDF text")
 if_node(P, "Auto-reply?", "={{ $('Email ready').first().json.auto_reply }}", "true", True, 700, 0)
-P.link("Store email", "Auto-reply?")
+P.link("Save PDF text", "Auto-reply?")
 P.pg("Record auto-reply", "with d as (insert into documents (message_id, source, doc_type, status, reasons) values ($1, 'email', 'other', 'ignored', '[\"Automatic reply or delivery report. Nothing to book.\"]'::jsonb) on conflict (message_id, source) do nothing returning id, message_id) "
      "insert into audit_log (actor, action, document_id, message_id, note) select 'system', 'ignored_non_invoice', d.id, d.message_id, 'Auto-reply / bounce (no AI call).' from d returning document_id as id",
      "[ $('Email ready').first().json.message_id ]", 920, -120)
@@ -263,7 +263,7 @@ P.pg("Save document", f"with d as (insert into documents ({DOC_COLS}, source) va
 P.link("Validate", "Save document"); P.link("AI could not read", "Save document")
 if_node(P, "Book now?", "={{ $json.status }}", "equals", "pending_erp", 2900, 220, "string")
 P.link("Save document", "Book now?")
-exec_wf(P, "Book in ERP", IDS["erp"], {"document_id": "={{ $json.id }}", "actor": "system"}, 3120, 120, onError="continueRegularOutput")
+exec_wf(P, "Book in ERP", IDS["erp"], {"document_id": "={{ $json.id }}", "actor": "system"}, 3120, 120, onError="continueRegularOutput", alwaysOutputData=True)
 P.link("Book now?", "Book in ERP", 0); P.link("Book in ERP", "Next document"); P.link("Book now?", "Next document", 1)
 P.pg("Anything saved?", "select count(*)::int as n, $1 as message_id from documents where message_id = $1", "[ $('Email ready').first().json.message_id ]", 1360, -40, executeOnce=True)
 P.link("One document at a time", "Anything saved?", 0)
@@ -287,52 +287,57 @@ P.link("Not an invoice?", "Record non-invoice")
 P.dump("02-process-email.json")
 
 # ═══════════════════════════════════ 2 · ERP BOOKING (+ retry) ═══════════════════════════════════
-B = WF("ERP Booking", IDS["erp"], {"errorWorkflow": IDS["errors"], "executionTimeout": 120, "callerPolicy": "workflowsFromAList", "callerIds": f"{IDS['process']},{IDS['review']}"})
-B.sticky("# ERP booking\nThe **only** place that writes to the ERP. Two ways in: right after approval, and every 5 minutes for anything still waiting (ERP maintenance). Row lock + unique key = never booked twice. After 5 failed attempts the document goes back to a person and Avanai is alerted.", -620, -440, 760, 190, 4)
+ERP_URL = ENV.get("ERP_BASE_URL_FOR_N8N", "http://erp:4000").rstrip("/")
+B = WF("ERP Booking", IDS["erp"], {"errorWorkflow": IDS["errors"], "executionTimeout": 180, "callerPolicy": "workflowsFromAList", "callerIds": f"{IDS['process']},{IDS['review']}"})
+B.sticky("# ERP booking\nThe **only** place that talks to the ERP, in real time over its API. Two ways in: right after approval, and every 5 minutes for anything still waiting.\n**The ERP's answer decides:** accepted → booked · already there (409) → duplicate · refused (4xx) → back to a person · not answering (timeout / 503) → waits, retried · unexpected error → 3 attempts, then back to a person. Each booking carries the document id, so a retry can never book twice.", -620, -520, 980, 210, 4)
 B.node("Book now (called)", "n8n-nodes-base.executeWorkflowTrigger", 1.1, {"inputSource": "workflowInputs", "workflowInputs": {"values": [{"name": "document_id", "type": "string"}, {"name": "actor", "type": "string"}]}}, -580, -120)
-B.node("Every 5 minutes", "n8n-nodes-base.scheduleTrigger", 1.3, {"rule": {"interval": [{"field": "minutes", "minutesInterval": 5}]}}, -580, 100)
-B.node("Run now", "n8n-nodes-base.manualTrigger", 1, {}, -580, 260)
-B.pg("Waiting bookings", "select d.id as document_id, 'system' as actor from documents d cross join erp_status s where d.status = 'pending_erp' and s.available and d.erp_attempts < 5 order by d.created_at limit 50", None, -340, 160)
+B.node("Every 5 minutes", "n8n-nodes-base.scheduleTrigger", 1.3, {"rule": {"interval": [{"field": "minutes", "minutesInterval": 5}]}}, -580, 80)
+B.node("Run now", "n8n-nodes-base.manualTrigger", 1, {}, -580, 240)
+B.pg("Waiting bookings", "select id as document_id, 'system' as actor from documents where status = 'pending_erp' and erp_attempts < 3 and (booking_started_at is null or booking_started_at < now() - interval '2 minutes') order by created_at limit 50", None, -360, 160)
 B.link("Every 5 minutes", "Waiting bookings"); B.link("Run now", "Waiting bookings")
-BOOK = ("with s as (select available from erp_status where id = 1), "
-        "src as (select d.* from documents d, s where d.id = $1::uuid and d.status = 'pending_erp' and s.available for update of d skip locked), "
-        "b as (insert into erp_invoices (document_id, supplier_vat_id, supplier_name, invoice_number, doc_type, invoice_date, due_date, currency, net_amount, vat_amount, gross_amount, po_number, booked_by) "
-        "select id, supplier_vat_id, supplier_name, invoice_number, doc_type, invoice_date, due_date, currency, net_amount, vat_amount, gross_amount, po_number, $2 from src on conflict (supplier_vat_id, invoice_number) do nothing returning id), "
-        "mine as (select e.id from erp_invoices e join src on e.supplier_vat_id = src.supplier_vat_id and e.invoice_number = src.invoice_number and e.document_id = src.id), "
-        "res as (select case when exists (select 1 from b) or exists (select 1 from mine) then 'booked' else 'duplicate' end as st, coalesce((select id from b), (select id from mine)) as eid from src), "
-        "u as (update documents d set status = res.st::doc_status, erp_invoice_id = res.eid, erp_attempts = d.erp_attempts + 1, last_error = null, updated_at = now(), "
-        "reasons = case when res.st = 'duplicate' then d.reasons || '[\"ERP already has this supplier + invoice number.\"]'::jsonb else d.reasons end from res where d.id = $1::uuid returning d.id, d.status, d.erp_invoice_id), "
-        "a as (insert into audit_log (actor, action, document_id, after, note) select $2, case when u.status = 'booked' then 'erp_booked' else 'erp_rejected_duplicate' end, u.id, jsonb_build_object('status', u.status, 'erp_invoice_id', u.erp_invoice_id), case when u.status = 'booked' then 'Booked in ERP.' else 'ERP refused: duplicate.' end from u returning 1), "
-        "dn as (insert into audit_log (actor, action, document_id, note) select $2, 'erp_unavailable', $1::uuid, 'ERP not reachable. The booking waits and is retried every 5 minutes.' from s where not s.available "
-        "and exists (select 1 from documents where id = $1::uuid and status = 'pending_erp') and not exists (select 1 from audit_log where document_id = $1::uuid and action = 'erp_unavailable' and ts > now() - interval '1 hour') returning 1) "
-        "select coalesce((select status::text from u), case when (select available from s) then 'not_pending' else 'pending_erp' end) as status, $1 as document_id, (select available from s) as erp_available")
-B.pg("Book (locked, once)", BOOK, "[ $json.document_id, $json.actor || 'system' ]", -100, 0, onError="continueErrorOutput")
-B.link("Book now (called)", "Book (locked, once)"); B.link("Waiting bookings", "Book (locked, once)")
-if_node(B, "ERP down?", "={{ $json.erp_available }}", "false", True, 140, -100)
-B.link("Book (locked, once)", "ERP down?", 0)
-B.pg("Alert: ERP down", alert_sql("'warning'", "'erp-booking'", "'ERP unavailable; bookings are queued and retried every 5 minutes'", "jsonb_build_object('document_id', $1)"), "[ $json.document_id ]", 380, -200)
-B.link("ERP down?", "Alert: ERP down", 0)
-B.pg("Close ERP alert when clear", "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and not acknowledged and (select available from erp_status where id = 1) and not exists (select 1 from documents where status = 'pending_erp') returning id",
-     None, 380, 0, alwaysOutputData=True, executeOnce=True)
-B.link("ERP down?", "Close ERP alert when clear", 1)
-FAIL = ("with u as (update documents set erp_attempts = erp_attempts + 1, last_error = $2, "
-        "status = case when erp_attempts + 1 >= 5 then 'needs_review'::doc_status else status end, "
-        "reasons = case when erp_attempts + 1 >= 5 then reasons || jsonb_build_array('ERP booking failed 5 times: ' || $2 || '. Check the values, then approve again.') else reasons end "
-        "where id = $1::uuid returning id, erp_attempts, status), "
-        "l as (insert into audit_log (actor, action, document_id, note) select 'system', 'erp_error', u.id, 'Attempt ' || u.erp_attempts || ': ' || $2 from u returning 1) "
-        "select u.erp_attempts >= 5 as parked, $1 as document_id, $2 as error from u")
-B.pg("Count failed attempt", FAIL, "[ $('Book (locked, once)').item.json.document_id || $json.document_id, String(($json.error && $json.error.message) || $json.error || 'unknown error').slice(0, 300) ]", 140, 200)
-B.link("Book (locked, once)", "Count failed attempt", 1)
-B.pg("Alert: booking failing", alert_sql("case when $2 then 'critical' else 'warning' end", "'erp-booking'", "case when $2 then 'ERP booking failed 5 times; document returned to review' else 'ERP booking failed; will retry' end", "jsonb_build_object('document_id', $1, 'error', $3)"),
-     "[ $json.document_id, $json.parked, $json.error ]", 380, 200)
-B.link("Count failed attempt", "Alert: booking failing")
-if_node(B, "New alert?", "={{ $json.is_new }}", "true", True, 620, -100)
-B.link("Alert: ERP down", "New alert?"); B.link("Alert: booking failing", "New alert?")
-notify(B, "E-mail Avanai on-call", 860, -100)
+B.pg("Claim document", "update documents set booking_started_at = now() where id = $1::uuid and status = 'pending_erp' and (booking_started_at is null or booking_started_at < now() - interval '2 minutes') "
+     "returning id, supplier_vat_id, supplier_name, invoice_number, doc_type::text as doc_type, invoice_date::text as invoice_date, due_date::text as due_date, currency, net_amount, vat_amount, gross_amount, po_number, $2::text as actor",
+     "[ $json.document_id, $json.actor || 'system' ]", -140, 0)
+B.link("Book now (called)", "Claim document"); B.link("Waiting bookings", "Claim document")
+B.node("Send to ERP", "n8n-nodes-base.httpRequest", 4.2, {"method": "POST", "url": f"{ERP_URL}/api/v1/supplier-invoices", "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+    "sendBody": True, "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ external_ref: $json.id, supplier_vat_id: $json.supplier_vat_id, supplier_name: $json.supplier_name, invoice_number: $json.invoice_number, doc_type: $json.doc_type, invoice_date: $json.invoice_date, due_date: $json.due_date, currency: $json.currency, net_amount: Number($json.net_amount), vat_amount: Number($json.vat_amount), gross_amount: Number($json.gross_amount), po_number: $json.po_number, booked_by: $json.actor }) }}",
+    "options": {"timeout": 20000, "response": {"response": {"fullResponse": True, "neverError": True}}}}, 80, 0, retryOnFail=True, maxTries=3, waitBetweenTries=10000, onError="continueErrorOutput")
+B.link("Claim document", "Send to ERP")
+B.code("Read ERP answer", r"""// Map the ERP's HTTP answer to one outcome. Network errors (no answer after 3 quick tries) arrive on the error output as 'down'.
+const doc = $('Claim document').item.json; const code = Number($json.statusCode || 0); const body = $json.body || {};
+const outcome = code === 200 || code === 201 ? 'booked' : code === 409 ? 'duplicate' : [400, 404, 422].includes(code) ? 'rejected' : [0, 502, 503, 504].includes(code) || !code ? 'down' : 'error';
+const msg = outcome === 'booked' ? 'Booked in ERP.' : outcome === 'down' ? `ERP not reachable (${code || ($json.error && $json.error.message) || 'no answer'}). Waiting; retried every 5 minutes.`
+  : `ERP answered ${code}: ${typeof body === 'object' ? (body.error || JSON.stringify(body)) : String(body).slice(0, 200)}${body.fields ? ' (' + body.fields.join(', ') + ')' : ''}`;
+return { json: { document_id: doc.id, actor: doc.actor, outcome, erp_id: body.id || null, msg } };""", 300, 0)
+B.link("Send to ERP", "Read ERP answer", 0); B.link("Send to ERP", "Read ERP answer", 1)
+RECORD = ("with r as (select $1::uuid as id, $2::text as outcome, $3::text as erp_id, $4::text as msg, $5::text as actor), "
+          "u as (update documents d set "
+          "status = (case r.outcome when 'booked' then 'booked' when 'duplicate' then 'duplicate' when 'rejected' then 'needs_review' when 'error' then case when d.erp_attempts + 1 >= 3 then 'needs_review' else 'pending_erp' end else 'pending_erp' end)::doc_status, "
+          "erp_invoice_id = case when r.outcome = 'booked' then r.erp_id::uuid else d.erp_invoice_id end, erp_attempts = d.erp_attempts + case when r.outcome = 'error' then 1 else 0 end, "
+          "last_error = case when r.outcome = 'booked' then null else r.msg end, booking_started_at = null, updated_at = now(), "
+          "reasons = case when r.outcome = 'duplicate' then d.reasons || '[\"ERP already has this supplier + invoice number.\"]'::jsonb when r.outcome = 'rejected' then d.reasons || jsonb_build_array('ERP refused the booking: ' || r.msg) "
+          "when r.outcome = 'error' and d.erp_attempts + 1 >= 3 then d.reasons || jsonb_build_array('ERP booking failed 3 times: ' || r.msg || '. Check the values, then approve again.') else d.reasons end "
+          "from r where d.id = r.id returning d.id, d.status), "
+          "a as (insert into audit_log (actor, action, document_id, after, note) select r.actor, case r.outcome when 'booked' then 'erp_booked' when 'duplicate' then 'erp_rejected_duplicate' when 'rejected' then 'erp_rejected' when 'down' then 'erp_unavailable' else 'erp_error' end, r.id, "
+          "jsonb_build_object('status', (select status from u), 'erp_invoice_id', r.erp_id), r.msg from r where r.outcome <> 'down' or not exists (select 1 from audit_log where document_id = r.id and action = 'erp_unavailable' and ts > now() - interval '1 hour') returning 1), "
+          "s as (update erp_status set available = (r.outcome <> 'down'), note = case when r.outcome = 'down' then 'ERP not reachable at last booking attempt' else 'ERP answering' end, updated_at = now() from r where erp_status.id = 1 returning 1) "
+          "select u.id as document_id, u.status::text as status, r.outcome, r.msg, (u.status = 'needs_review' and r.outcome in ('error', 'rejected')) as handed_back from u, r")
+B.pg("Record result", RECORD, "[ $json.document_id, $json.outcome, $json.erp_id, $json.msg, $json.actor ]", 520, 0)
+B.link("Read ERP answer", "Record result")
+B.node("What next?", "n8n-nodes-base.switch", 3.2, {"rules": {"values": [
+    {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 2}, "conditions": [{"id": nid(), "leftValue": c, "rightValue": "", "operator": {"type": "boolean", "operation": "true", "singleValue": True}}], "combinator": "and"}, "renameOutput": True, "outputKey": k}
+    for k, c in (("ERP down", "={{ $json.outcome === 'down' }}"), ("Handed back", "={{ $json.handed_back }}"), ("Booked", "={{ $json.outcome === 'booked' }}"))]}, "options": {}}, 740, 0)
+B.link("Record result", "What next?")
+B.pg("Alert", alert_sql("$1", "'erp-booking'", "$2", "jsonb_build_object('document_id', $3, 'detail', $4)"),
+     "[ $json.outcome === 'down' ? 'warning' : 'critical', $json.outcome === 'down' ? 'ERP not reachable; bookings wait and are retried every 5 minutes' : 'ERP booking returned to review: ' + ($json.outcome === 'rejected' ? 'ERP refused it' : 'failed 3 times'), $json.document_id, $json.msg ]", 980, -100)
+B.link("What next?", "Alert", 0); B.link("What next?", "Alert", 1)
+B.pg("Close ERP-down alert", "update alerts set acknowledged = true where source = 'erp-booking' and severity = 'warning' and not acknowledged returning id", None, 980, 120, alwaysOutputData=True, executeOnce=True)
+B.link("What next?", "Close ERP-down alert", 2)
+if_node(B, "New alert?", "={{ $json.is_new }}", "true", True, 1200, -100)
+B.link("Alert", "New alert?")
+notify(B, "E-mail Avanai on-call", 1420, -100)
 B.link("New alert?", "E-mail Avanai on-call", 0)
-B.group("Ways in", "Called right after approval, or every 5 minutes for anything still waiting.", ["Book now (called)", "Every 5 minutes", "Run now", "Waiting bookings"])
-B.group("Book", "One SQL statement: row lock, availability check, insert with unique key, status and audit.", ["Book (locked, once)", "ERP down?", "Close ERP alert when clear"])
-B.group("When it fails", "Count attempts, park after 5, alert once (de-duplicated) and e-mail on-call.", ["Count failed attempt", "Alert: booking failing", "Alert: ERP down", "New alert?", "E-mail Avanai on-call"])
 B.dump("03-erp-booking.json")
 
 # ═══════════════════════════════════ 3 · REVIEW DECISION ═══════════════════════════════════
@@ -397,10 +402,12 @@ D.pg("Mark rejected", "with u as (update documents set status = 'rejected', upda
 D.pg("Reopen", "with u as (update documents set status = 'needs_review', updated_at = now(), reasons = reasons || jsonb_build_array('Reopened by ' || $2 || coalesce(': ' || $3, '')) where id = $1::uuid and status = 'rejected' returning id), a as (insert into audit_log (actor, action, document_id, note) select $2, 'reopened', u.id, $3 from u returning id) select 'needs_review' as status",
      "[ $json.before.id, $json.actor, $json.note ]", 840, 220, onError="continueErrorOutput")
 for i, t in enumerate(("Approve → ready to book", "Save corrections", "Mark rejected", "Reopen")): D.link("Which action?", t, i)
-exec_wf(D, "Book in ERP", IDS["erp"], {"document_id": "={{ $json.id }}", "actor": "={{ $('Check decision').item.json.actor }}"}, 1080, -320, onError="continueRegularOutput")
+exec_wf(D, "Book in ERP", IDS["erp"], {"document_id": "={{ $json.id }}", "actor": "={{ $('Check decision').item.json.actor }}"}, 1080, -320, onError="continueRegularOutput", alwaysOutputData=True)
 D.link("Approve → ready to book", "Book in ERP", 0)
-D.node("Respond", "n8n-nodes-base.respondToWebhook", 1.4, {"respondWith": "json", "responseBody": "={{ JSON.stringify({ ok: true, status: $json.status || 'pending_erp', message: ({ booked: 'Booked in the ERP.', pending_erp: 'Approved. The ERP is not reachable right now; it will be booked automatically when it is back.', duplicate: 'ERP refused it: this invoice number is already booked.', needs_review: 'Saved.', rejected: 'Rejected.' })[$json.status] || 'Approved. Booking is queued.' }) }}", "options": {}}, 1320, -100)
-for src in ("Book in ERP", "Save corrections", "Mark rejected", "Reopen"): D.link(src, "Respond")
+D.pg("Status after booking", "select status::text as status, last_error from documents where id = $1::uuid", "[ $('Check decision').item.json.before.id ]", 1300, -320, executeOnce=True)
+D.link("Book in ERP", "Status after booking")
+D.node("Respond", "n8n-nodes-base.respondToWebhook", 1.4, {"respondWith": "json", "responseBody": "={{ JSON.stringify({ ok: true, status: $json.status || 'pending_erp', message: ({ booked: 'Booked in the ERP.', pending_erp: 'Approved. The ERP is not reachable right now; it will be booked automatically when it is back.', duplicate: 'ERP refused it: this invoice number is already booked.', needs_review: $json.last_error ? 'The ERP refused it; it is back in review: ' + $json.last_error : 'Saved.', rejected: 'Rejected.' })[$json.status] || 'Approved. Booking is queued.' }) }}", "options": {}}, 1320, -100)
+for src in ("Status after booking", "Save corrections", "Mark rejected", "Reopen"): D.link(src, "Respond")
 D.node("Respond: error", "n8n-nodes-base.respondToWebhook", 1.4, {"respondWith": "json", "responseBody": "={{ JSON.stringify({ ok: false, reasons: ['Something went wrong while saving. Nothing was booked. Please try again; Avanai has been alerted.'] }) }}", "options": {"responseCode": 500}}, 1080, 260)
 for src in ("Load document + user", "Approve → ready to book", "Save corrections", "Mark rejected", "Reopen"): D.link(src, "Respond: error", 1)
 D.group("Check", "Shared secret on the webhook, role from the user table, same rules as the intake, clerk limit 10,000 EUR.", ["Decision in", "Load document + user", "Check decision", "Accepted?", "Refuse"])
@@ -417,9 +424,9 @@ M.pg("Record failure", alert_sql("'critical'", "$1", "$2", "$3"),
 M.link("Workflow failed", "Record failure")
 M.node("Every 15 minutes", "n8n-nodes-base.scheduleTrigger", 1.3, {"rule": {"interval": [{"field": "minutes", "minutesInterval": 15}]}}, -380, 60)
 M.node("Run now", "n8n-nodes-base.manualTrigger", 1, {}, -380, 240)
-M.pg("Unfinished emails", "select e.message_id, e.from_addr, e.subject, e.body, e.received_at, e.attachments from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '10 minutes' order by e.created_at limit 20", None, -140, 260)
-M.node("Re-run intake", "n8n-nodes-base.executeWorkflow", 1.2, {"workflowId": {"__rl": True, "mode": "id", "value": IDS["intake"]}, "mode": "each", "options": {"waitForSubWorkflow": True}}, 100, 260, onError="continueRegularOutput")
-M.link("Unfinished emails", "Re-run intake")
+M.pg("Unfinished emails", "select e.message_id, e.from_addr, e.subject, e.body, e.received_at, e.attachments, e.meta from inbound_emails e where not exists (select 1 from documents d where d.message_id = e.message_id) and e.created_at < now() - interval '10 minutes' order by e.created_at limit 20", None, -140, 260)
+M.node("Re-run Process Email", "n8n-nodes-base.executeWorkflow", 1.2, {"workflowId": {"__rl": True, "mode": "id", "value": IDS["process"]}, "mode": "each", "options": {"waitForSubWorkflow": True}}, 100, 260, onError="continueRegularOutput")
+M.link("Unfinished emails", "Re-run Process Email")
 M.pg("Health checks", "select * from ("
      "select 'warning' as severity, 'ERP bookings waiting more than 2 hours' as message, count(*) as n from documents where status = 'pending_erp' and updated_at < now() - interval '2 hours' having count(*) > 0 "
      "union all select 'warning', 'Invoices waiting for review more than 2 working days', count(*) from documents where status = 'needs_review' and created_at < now() - interval '2 days' having count(*) > 0 "

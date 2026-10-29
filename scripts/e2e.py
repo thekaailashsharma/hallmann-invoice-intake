@@ -8,6 +8,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 def psql(sql): return subprocess.run(["docker", "exec", "intake-postgres", "psql", "-U", "intake", "-d", "intake", "-At", "-c", sql], capture_output=True, text=True).stdout.strip()
 if "--keep" not in sys.argv:
     psql("set session_replication_role = replica; truncate audit_log, alerts, erp_invoices, documents, inbound_emails restart identity cascade; update erp_status set available = true, note = 'ERP online';")
+    subprocess.run(["bash", str(ROOT / "scripts" / "erp.sh"), "up"], capture_output=True)
     print("reset data")
     for user in ("oncall@avanai.example",):   # empty the alert inbox (the invoice mailbox is left alone: processed mail is already marked read)
         try:
