@@ -1,11 +1,8 @@
 # Invoice intake for Hallmann Maschinenbau
 
-Supplier invoices come in by email. Clean invoices are booked in the ERP. Everything else goes to a person. The AI reads the invoice, the rules decide what happens to it.
+Jana and Thomas spend most of their week typing supplier invoices into the ERP. This project takes that work off their desk. Invoices arrive by email, the system reads them, and the ones that are clearly correct are booked in the ERP on their own. Anything the system is not sure about goes to Jana and Thomas, with the reason written next to it.
 
-1. Review screen: https://hallmann-invoices.vercel.app
-2. Visual walkthrough: `docs/invoice-journey.pdf`
-3. n8n workflows: `workflows/`
-4. Production checklist: `docs/PRODUCTION-CHECKLIST.md`
+You can try the review screen at https://hallmann-invoices.vercel.app. There is also a short visual walkthrough in `docs/invoice-journey.pdf`, the n8n workflows are in `workflows/`, and the list of what is needed before go-live is in `docs/PRODUCTION-CHECKLIST.md`.
 
 ## The journey
 
@@ -13,74 +10,49 @@ Supplier invoices come in by email. Clean invoices are booked in the ERP. Everyt
 
 ## Run it
 
-Copy `.env.example` to `.env` and fill it in. Then:
+Copy `.env.example` to `.env` and fill in the keys. Then start everything and send the sample emails into the mailbox:
 
 ```bash
-./scripts/setup.sh                 # starts the stack and imports the workflows
-python3 scripts/send-emails.py     # delivers the sample emails to the mailbox
+./scripts/setup.sh
+python3 scripts/send-emails.py
 ```
 
-The review screen runs on http://localhost:3001, n8n on http://localhost:5678.
+The review screen runs on http://localhost:3001 and n8n on http://localhost:5678.
 
 ## How it is built, and why
 
-There are five n8n workflows:
+The work is split into five n8n workflows, each with one job. Invoice Intake reads the mailbox and saves every email and its attachments before anything else happens. Process Email reads the invoice, whether it is in the email text, a PDF or an XRechnung file, and decides what to do with it. ERP Booking is the only part that writes to the ERP. Review Decision handles what Jana and Thomas do on the screen. Monitoring tells Avanai when something goes wrong.
 
-1. Invoice Intake: reads the mailbox (IMAP or Gmail) and stores every email and its files before anything else runs.
-2. Process Email: reads the PDF or XML, checks for manipulation, lets the AI classify and extract, then the rules decide.
-3. ERP Booking: books in the ERP in real time. If the ERP is down, it waits and retries every 5 minutes.
-4. Review Decision: handles approve, save, reject and reopen from the review screen.
-5. Monitoring: alerts Avanai by email when something fails or gets stuck.
+The most important decision was that the AI never decides what gets booked. Sabine's last tool mixed up net and gross for weeks without anyone noticing, so here the AI only reads the invoice. A set of plain rules then checks what it read. Every amount, the invoice number and the VAT ID must actually appear in the document, and net plus VAT must equal gross. If anything doesn't add up, the invoice goes to a person instead of the ERP.
 
-The AI only reads. A set of plain rules decides what gets booked, and those rules are unit-tested. Every amount, the invoice number and the VAT ID must appear in the document. Net plus VAT must equal gross. This is how the net/gross mix-up Sabine mentioned cannot happen again.
+The same rules catch the things Sabine listed. A resent invoice is recognised as a duplicate, even when the number is written a little differently. Reminders, proformas and meeting emails are recorded but never booked. Forwarded invoices from colleagues are read like any other. Credit notes are booked as credit notes. German and English both work. On top of that, the rules flag unknown suppliers, changed bank details and emails from look-alike addresses, because those are how invoice fraud usually happens. Nothing above 10,000 € is booked without a person, which is the same limit a clerk has.
 
-The rules also catch duplicates (even when the number is written differently), unknown suppliers, changed bank details and look-alike senders. Nothing above 10,000 € is booked without a person, the same limit a clerk has.
+Nothing gets lost along the way. Every email is saved before the system starts working on it, so if a step fails, it can pick up again later. When the ERP is down for maintenance, the invoice simply waits and the system tries again every five minutes. Each invoice is booked once, even if the ERP is asked twice.
 
-Emails are stored first, so nothing is lost if a later step fails. Each invoice is booked once, even if the ERP is asked twice.
+The review screen is kept simple. Jana and Thomas see the original PDF next to the fields the system read. Fields that are wrong are marked red, and things that only need a second look are marked amber. When they change a number, the related amounts update on their own. A lead can still force a booking if needed, and that is logged clearly. Every change is saved with who made it, when, and what the values were before and after, so the auditors' question finally has an answer.
 
-On the review screen, Jana and Thomas see the original PDF next to the fields. Red means fix, amber means accept with a note. A lead can force a booking, which is logged as forced. Every change is saved in an audit log that cannot be edited: who, when, before and after.
-
-Data lives in Postgres, because auditors need transactions and a log nobody can change.
+All of this is stored in Postgres, because the auditors need a record that cannot be quietly changed afterwards.
 
 ## How I know it works
 
-1. 30 unit tests on the rules and the workflow structure. All pass.
-2. 19 emails sent through a real mailbox, end to end: the 12 samples plus 7 edge cases. All pass.
-3. 26 invoice formats, including tables, multi-page invoices, XRechnung and official ZUGFeRD samples. 25 behave as expected.
-4. An ERP outage test: the invoice waits, Avanai gets one email, and it is booked exactly once when the ERP is back.
-5. Gmail tested end to end on a real account.
+I tested it in four ways. There are 30 unit tests on the rules and on how the workflows are wired, and they all pass. I sent Sabine's 12 sample emails plus 7 harder cases through a real mailbox, one at a time, and every one ended up where it should. I also tested 26 different invoice layouts, including multi-page invoices, two VAT rates, US dates, XRechnung and official ZUGFeRD samples. 25 of them behave as expected, and the one that doesn't still goes safely to a person. Finally, I switched the ERP off in the middle of a booking: the invoice waited, Avanai got one email, and once the ERP was back the invoice was booked exactly once. I also tested the whole flow with a real Gmail account.
 
 ## What I would add before this runs for a real client
 
-1. Hallmann's real ERP. Today it is a mock that behaves like a real booking API.
-2. An AI model hosted in the EU, under a data processing agreement. Today it is Sarvam, hosted in India.
-3. A dedicated invoice mailbox, set up by Hallmann IT.
-4. Real hosting with HTTPS and backups.
-5. A supplier list synced from the ERP.
-6. A pilot on real invoices with automatic booking switched off.
+The biggest piece is Hallmann's real ERP. Today the system books into a mock that behaves like a real booking API, so we need to know which ERP Hallmann uses and get access to a test system. The AI model should move to a provider hosted in the EU, with a data processing agreement, since the current one is hosted in India. Hallmann IT would set up a dedicated invoice mailbox, and the system needs proper hosting with HTTPS and backups. The supplier list should be synced from the ERP every night. Before any invoice is booked automatically, I would run a pilot on real invoices with automatic booking switched off, to see how often the system gets it right.
 
 ## What I didn't finish
 
-1. Scanned PDFs go to a person. There is no OCR yet.
-2. Invoices with two VAT rates go to a person.
-3. Early-payment discounts (Skonto) are not captured.
-4. The manipulation check flags some genuine e-invoices. That is safe, because they go to a person, but it needs tuning.
-5. The live demo runs on my machine through a tunnel, not on a server.
+Scanned PDFs without text still go to a person, because there is no OCR yet. Invoices with two VAT rates also go to a person, and early-payment discounts (Skonto) are not captured. The check for manipulated emails sometimes flags genuine e-invoices. That is safe, because they go to a person, but it needs tuning on real mail. And the live demo runs on my laptop through a tunnel, not on a proper server.
 
 ## What I assumed
 
-1. A few invoices arrive per hour, so emails are processed one at a time.
-2. An invoice can arrive as email text, a PDF, or an XRechnung/ZUGFeRD file.
-3. Correct beats automatic. Anything the rules cannot prove goes to a person.
-4. Jana and Thomas are clerks. Sabine is a lead.
-5. Foreign currency and non-EU VAT always need a person.
+Where the brief left things open, I made these calls. Several hundred invoices a month is a few per hour, so emails are handled one at a time and correctness matters more than speed. An invoice can arrive as email text, a PDF or an e-invoice file. Being correct matters more than being automatic, so anything the rules cannot prove goes to a person. Jana and Thomas are clerks and Sabine is a lead. Invoices in foreign currencies, or with VAT from outside the EU, always need a person.
 
 ## What I propose next
 
-1. Connect the ERP test system, the mailbox and an EU model.
-2. Run a four-week pilot with automatic booking off, and measure how often the system is right.
-3. Switch automatic booking on, one supplier at a time.
+First, connect Hallmann's ERP test system, the real mailbox and an EU-hosted model. Then run a pilot for about four weeks with automatic booking switched off, so every invoice still goes to Jana and Thomas and we can measure how often the system was right. Once Sabine is happy with the numbers, we switch automatic booking on, one supplier at a time.
 
 ## Where I used AI coding tools
 
-I built this with Claude Code as a pair programmer, for code, tests and design reviews. The product decisions and the manual testing are mine.
+I used Claude Code as a pair programmer throughout: it wrote much of the code and the tests and helped review the design. The product decisions, the rules and the hands-on testing are mine.

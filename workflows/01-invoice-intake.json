@@ -14,7 +14,7 @@
           "forceReconnect": 5
         }
       },
-      "id": "6d97342d-fd79-481c-8686-14d93f2f25fe",
+      "id": "f0c9ae5d-de1b-4083-874b-116af49ec404",
       "name": "Invoice mailbox (IMAP)",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2.2,
@@ -44,7 +44,7 @@
           "dataPropertyAttachmentsPrefixName": "attachment_"
         }
       },
-      "id": "4a9ab387-0a15-4353-a1ff-375760b08cfa",
+      "id": "5ef0d894-6eeb-43c4-b61e-432c336df95f",
       "name": "Invoice mailbox (Gmail)",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.4,
@@ -58,7 +58,7 @@
       "parameters": {
         "jsCode": "// Three entry points, one shape. Attachments: XML e-invoices (XRechnung / ZUGFeRD) are read here as text; PDFs go to \"Read PDF\".\nconst IBAN_RE = /\\b[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\\b/g;\n// E-invoices (XRechnung UBL / ZUGFeRD CII): the key fields are read straight from the XML and put on top, clearly labelled.\nconst pick = (x, ...tags) => { for (const t of tags) { const m = x.match(new RegExp('<(?:\\\\w+:)?' + t + '\\\\b[^>]*>([^<]+)</')); if (m) return m[1].trim(); } return ''; };\nconst einvoice = (x) => { if (!/<(\\w+:)?(Invoice|CreditNote|CrossIndustryInvoice)\\b/.test(x)) return '';\n  const party = (x.match(/<(?:\\w+:)?(AccountingSupplierParty|SellerTradeParty)\\b[\\s\\S]*?<\\/(?:\\w+:)?\\1>/) || [''])[0];\n  const head = x.replace(/<(?:\\w+:)?(InvoiceLine|IncludedSupplyChainTradeLineItem|AccountingSupplierParty|AccountingCustomerParty|SellerTradeParty|BuyerTradeParty|OrderReference|BuyerOrderReferencedDocument)\\b[\\s\\S]*?<\\/(?:\\w+:)?\\1>/g, '');\n  return ['E-INVOICE (structured data)', 'Invoice number: ' + pick(head, 'ID'), 'Invoice date: ' + (pick(head, 'IssueDate') || pick(head, 'DateTimeString')), 'Due date: ' + pick(head, 'DueDate'),\n    'Currency: ' + pick(head, 'DocumentCurrencyCode', 'InvoiceCurrencyCode'), 'Supplier: ' + pick(party, 'RegistrationName', 'Name'), 'Supplier VAT ID: ' + pick(party, 'CompanyID'),\n    'Order reference: ' + (pick(x.match(/<(?:\\w+:)?OrderReference\\b[\\s\\S]*?<\\/(?:\\w+:)?OrderReference>/)?.[0] || '', 'ID') || pick(x, 'BuyerReference')),\n    'Net: ' + pick(head, 'TaxExclusiveAmount', 'TaxBasisTotalAmount'), 'VAT: ' + pick(head, 'TaxAmount', 'TaxTotalAmount'), 'Total payable: ' + pick(head, 'PayableAmount', 'DuePayableAmount', 'GrandTotalAmount'),\n    '--- full XML content ---'].join('\\n') + '\\n'; };\nconst xmlToText = (x) => einvoice(x) + x.replace(/<\\?xml[^>]*>/g, '').replace(/<([\\w:.-]+)[^>]*>([^<]{1,200})<\\/\\1>/g, (_, t, v) => `${t.split(':').pop()}: ${v.trim()}\\n`).replace(/<[^>]+>/g, ' ').replace(/[ \\t]+/g, ' ').replace(/\\n\\s*\\n+/g, '\\n').trim();\nconst out = [];\nconst items = $input.all();\nfor (let i = 0; i < items.length; i++) {\n  const it = items[i]; const j = it.json;\n  const e = j.body && typeof j.body === 'object' && (j.body.id || j.body.message_id) ? j.body : j;   // webhook | reprocess | IMAP | Gmail\n  const from = (e.from && e.from.value && e.from.value[0] && e.from.value[0].address) || (e.from && e.from.text) || (typeof e.from === 'string' ? e.from : '') || e.from_addr || '';\n  let body = String(e.text || (typeof e.body === 'string' ? e.body : '') || '');\n  if (!body && e.html) body = String(e.html).replace(/<style[\\s\\S]*?<\\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');\n  const headers = JSON.stringify(e.headerLines || e.headers || '').toLowerCase();\n  const subject = String(e.subject || '');\n  // attachments (IMAP binary) or stored attachment texts (reprocess)\n  const attachments = Array.isArray(e.attachments) && e.attachments.length && e.attachments[0].kind ? e.attachments : [];\n  let pdf_key = null, pdf_name = null, pdf_count = 0; const files = [];\n  for (const [k, b] of Object.entries(it.binary || {})) {\n    const name = b.fileName || k, mime = (b.mimeType || '').toLowerCase();\n    if (/pdf/.test(mime) || /\\.pdf$/i.test(name)) { pdf_count++; if (!pdf_key) { pdf_key = k; pdf_name = name; } attachments.push({ name, kind: 'pdf', text: null });\n      const buf = await this.helpers.getBinaryDataBuffer(i, k); files.push({ name, mime: 'application/pdf', b64: buf.toString('base64') }); }\n    else if (/xml/.test(mime) || /\\.xml$/i.test(name)) { const buf = await this.helpers.getBinaryDataBuffer(i, k); attachments.push({ name, kind: 'xml', text: xmlToText(buf.toString('utf8')).slice(0, 20000) }); files.push({ name, mime: 'application/xml', b64: buf.toString('base64') }); }\n    else if (!/^image\\/(png|gif|jpe?g)$/.test(mime) || (b.fileSize && parseInt(b.fileSize) > 50000)) attachments.push({ name, kind: 'other', text: null });   // small inline images = signatures\n  }\n  // newest message only: drop quoted (\"> \") lines and Outlook \"-----Original-----\" / \"Von:\" history\n  const lines = body.split(/\\r?\\n/); const cut = lines.findIndex((l) => /^-{2,}\\s*(original|ursprüngliche) (message|nachricht)/i.test(l) || /^(Von|From):\\s.+\\s(Gesendet|Sent):/i.test(l));\n  const main = (cut > 0 ? lines.slice(0, cut) : lines).filter((l) => !/^\\s*>/.test(l)).join('\\n').trim();\n  const forwarded = /^-{3,}\\s*(forwarded message|weitergeleitete nachricht)|^(Fwd?|WG):/im.test(body) || /^(Fwd?|WG|AW|RE):/i.test(subject) && /forwarded|weitergeleitet/i.test(body);\n  const auto_reply = /auto-submitted: auto-|x-autoreply|x-autorespond|precedence: (auto_reply|bulk|junk)/.test(headers) || /mailer-daemon|postmaster@/i.test(from)\n    || /^(automatic reply|auto(matische)? ?(antwort|reply)|abwesenheitsnotiz|out of (the )?office|undeliverable|unzustellbar|delivery status notification|returned mail)/i.test(subject);\n  let h = 2166136261; for (const ch of body) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }\n  out.push({ json: {\n    message_id: String(e.messageId || (e.headers && (e.headers['message-id'] || e.headers['Message-ID'])) || e.message_id || e.id || ('gen-' + h.toString(16))).replace(/^<|>$/g, ''),\n    received_at: e.date || e.received_at || new Date().toISOString(),\n    from_addr: from, sender_domain: (from.split('@')[1] || '').toLowerCase().replace(/>$/, ''), subject, body, main_text: main,\n    forwarded, auto_reply, attachments, files, gmail_id: e.threadId ? e.id : null, pdf_key, pdf_name, pdf_count, body_hash: h.toString(16),\n    meta: { sender_domain: (from.split('@')[1] || '').toLowerCase().replace(/>$/, ''), main_text: main, forwarded, auto_reply, gmail_id: e.threadId ? e.id : null },\n  }, binary: it.binary, pairedItem: { item: i } });\n}\nreturn out;"
       },
-      "id": "4e382562-0c48-471e-a42e-7eda99ecc037",
+      "id": "ab78b96d-fdf9-4d43-b408-990104e18294",
       "name": "Parse email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -75,7 +75,7 @@
           "queryReplacement": "={{ [ $json.message_id, $json.received_at, $json.from_addr, $json.subject, $json.body, $json.body_hash, JSON.stringify($json.attachments), JSON.stringify($json.meta) ] }}"
         }
       },
-      "id": "dadfff0c-58ee-4ab3-a9ac-98f9f7fcd5fe",
+      "id": "755aab7b-f2c7-44f3-8b88-032918baab54",
       "name": "Store email",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -96,7 +96,7 @@
           "queryReplacement": "={{ [ $('Parse email').item.json.message_id, JSON.stringify($('Parse email').item.json.files || []) ] }}"
         }
       },
-      "id": "76acbb74-c6ee-44c9-b1b6-0d0111ea84e8",
+      "id": "fa5cff04-b3a1-439e-9475-9079de718cca",
       "name": "Store attachment files",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.8,
@@ -113,7 +113,7 @@
       "parameters": {
         "jsCode": "// The mailbox marks mail as read on fetch, so every email is stored before anything that can fail.\n// From here a crash is recovered by Monitoring (re-runs stored emails that have no result).\nreturn $('Parse email').all().map((it) => ({ json: { ...it.json, files: undefined }, binary: it.binary }));"
       },
-      "id": "b93721ea-073d-4ba6-9635-4f261ab49c26",
+      "id": "66a3b99d-7e70-4c7d-a384-54058f3351eb",
       "name": "Hand over (with attachments)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -134,7 +134,7 @@
           "waitForSubWorkflow": true
         }
       },
-      "id": "4448a862-1f2c-45cc-9220-20ef6b81dafd",
+      "id": "a1d01d34-1677-406d-9da7-71e501c17bcc",
       "name": "Process each email",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
@@ -155,7 +155,7 @@
           },
           "conditions": [
             {
-              "id": "245a3fa7-3693-40b1-a44b-a6b79335ed35",
+              "id": "c9abe67a-907a-4463-9308-e93d11a35fd2",
               "leftValue": "={{ !!$json.gmail_id }}",
               "rightValue": true,
               "operator": {
@@ -169,7 +169,7 @@
         },
         "options": {}
       },
-      "id": "994d82a0-fc32-4b4b-a0fc-1e0802b29227",
+      "id": "84ca8d3b-cd8c-466e-bf44-930a58ff633d",
       "name": "From Gmail?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
@@ -184,7 +184,7 @@
         "operation": "getAll",
         "returnAll": true
       },
-      "id": "34d1d3bc-0bf8-4a11-bbaf-76207927af12",
+      "id": "11ee982e-9cef-42d3-bca4-8ad91ce5f464",
       "name": "Gmail: labels",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
@@ -202,7 +202,7 @@
       "parameters": {
         "jsCode": "// The 'Processed' label is the done-marker the Gmail query excludes. Create it once in the mailbox.\nconst l = $input.all().find((i) => i.json.name === 'Processed');\nif (!l) throw new Error(\"Gmail label 'Processed' is missing. Create it once in the invoice mailbox.\");\nreturn $('From Gmail?').all().map((e) => ({ json: { label_id: l.json.id, gmail_id: e.json.gmail_id } }));"
       },
-      "id": "d8ca2bcd-b756-4f0c-877f-d0e17d48621a",
+      "id": "6ca65da1-ffc4-4777-b902-f5a805808105",
       "name": "Processed label",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -218,7 +218,7 @@
         "messageId": "={{ $json.gmail_id }}",
         "labelIds": "={{ [$json.label_id] }}"
       },
-      "id": "c5f0b075-3720-4dfc-80c2-b340b4583708",
+      "id": "edf63a3d-6e0a-4e38-b31e-4ddc4bfdd0e6",
       "name": "Gmail: mark Processed",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
@@ -238,7 +238,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "940a1902-4ca8-4c38-b664-c0d096a5e134",
+      "id": "a4d4da27-5edc-4023-a8e8-75eb8195bcb0",
       "name": "Note 11",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -254,7 +254,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "c4257ee6-6541-4ba6-8741-ef8bbf9f5188",
+      "id": "23c16786-e96d-42f6-b568-77f6f98eca9d",
       "name": "Note 12",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -270,7 +270,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "3c425b32-e672-487e-9f65-6ca7a904a09a",
+      "id": "aab64d8f-ce9d-4994-b686-4bcbd95dc167",
       "name": "Note 13",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -286,7 +286,7 @@
         "width": 330,
         "color": 1
       },
-      "id": "6ce146fd-2f00-4b2f-8600-e93d3feeb847",
+      "id": "b1b199de-593f-4a0f-ad86-55aeee4ddc98",
       "name": "Note 14",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -302,7 +302,7 @@
         "width": 680,
         "color": 7
       },
-      "id": "ef171c6c-58bc-4506-b4cc-a820cc46b24f",
+      "id": "31e8882b-4032-49af-9351-8806f0b8d47d",
       "name": "Note 15",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
