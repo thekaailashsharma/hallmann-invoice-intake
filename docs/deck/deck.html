@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice Intake Readout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f4ee;--ink:#1c1c1e;--muted:#8b8b90;--yellow:#f7d44c;--green:#2f8a4c;--red:#c43d2f;--dark:#1c1c1e;}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0e0e10;font-family:"Outfit",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.deck{position:fixed;inset:0;overflow:hidden}
+section{position:absolute;left:50%;top:50%;width:1920px;height:1080px;margin:-540px 0 0 -960px;background:var(--bg);overflow:hidden;display:none;transform-origin:center center}
+section.active{display:block}
+section.dark{background:var(--dark);color:#f6f4ee}
+.num{position:absolute;right:72px;bottom:56px;font-size:22px;font-weight:400;color:var(--muted);letter-spacing:.04em}
+.dark .num{color:#5c5c61}
+.c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 160px}
+h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
+.xl{font-size:200px}
+.l{font-size:132px}
+.m{font-size:104px}
+.s{font-size:84px}
+.sub{margin-top:48px;font-size:40px;font-weight:400;color:var(--muted);letter-spacing:-.005em}
+.kicker{font-size:30px;font-weight:500;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-bottom:40px}
+.dot{display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--yellow);margin-right:20px;vertical-align:middle}
+.labels{display:flex;gap:22px;margin-top:88px;flex-wrap:wrap;justify-content:center}
+.label{font-size:30px;font-weight:500;padding:20px 34px;border-radius:999px;background:#fff;box-shadow:0 2px 0 rgba(0,0,0,.03),0 12px 32px rgba(28,28,30,.06);white-space:nowrap}
+.label i{font-style:normal;display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:16px;vertical-align:middle;position:relative;top:-2px}
+.shot{border-radius:24px;box-shadow:0 2px 6px rgba(28,28,30,.05),0 40px 100px rgba(28,28,30,.16);display:block}
+.top{position:absolute;left:0;right:0;top:120px;text-align:center}
+.top h1{font-size:88px}
+.top .sub{margin-top:24px;font-size:34px}
+.three h1{font-size:112px;line-height:1.18}
+.three .g{color:#f6f4ee}
+.three .d{color:#5c5c61}
+.stats{display:flex;gap:56px;margin-top:120px;width:100%;justify-content:center}
+.stat{flex:0 0 380px;text-align:center}
+.stat b{display:block;font-size:128px;font-weight:600;letter-spacing:-.04em;line-height:1}
+.stat span{display:block;margin-top:28px;font-size:30px;color:var(--muted);font-weight:400}
+.timeline{display:flex;align-items:flex-start;margin-top:140px;width:1500px;position:relative}
+.timeline:before{content:"";position:absolute;left:250px;right:250px;top:22px;height:3px;background:#dedad0}
+.step{flex:1;text-align:center;position:relative}
+.step .pt{width:48px;height:48px;border-radius:50%;background:var(--bg);border:3px solid var(--ink);margin:0 auto 44px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600}
+.step:first-child .pt{background:var(--yellow);border-color:var(--yellow)}
+.step p{font-size:38px;font-weight:500;line-height:1.25;letter-spacing:-.01em;padding:0 30px}
+.step small{display:block;font-size:24px;color:var(--muted);margin-top:16px;font-weight:400;letter-spacing:.08em;text-transform:uppercase}
+@media print{
+  @page{size:1920px 1080px;margin:0}
+  html,body{background:none}
+  .deck{position:static;overflow:visible}
+  section{display:block!important;position:relative;left:0;top:0;margin:0;transform:none!important;page-break-after:always;break-after:page}
+  .hint{display:none}
+}
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- 1 -->
+<section>
+  <div class="c">
+    <div class="kicker"><span class="dot"></span>Readout</div>
+    <h1 class="xl">Invoice intake</h1>
+    <p class="sub">Hallmann Maschinenbau × Avanai · 30 Oct</p>
+  </div>
+</section>
+
+<!-- 2 -->
+<section>
+  <div class="c">
+    <h1 class="l">Most of the week,<br>typing invoices.</h1>
+    <p class="sub">Jana and Thomas · several hundred a month</p>
+  </div>
+</section>
+
+<!-- 3 -->
+<section>
+  <div class="c">
+    <h1 class="l">Net and gross, mixed up.<br><span style="color:var(--red)">For weeks.</span></h1>
+    <p class="sub">The last AI tool</p>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="dark">
+  <div class="c three">
+    <h1>Nothing wrong reaches the ERP.</h1>
+    <h1>Nothing gets lost.</h1>
+    <h1>Every change is traceable.</h1>
+  </div>
+</section>
+
+<!-- 5 -->
+<section>
+  <div class="top"><h1>The journey</h1></div>
+  <img class="shot" src="img/journey-flow.png" alt="Invoice journey" style="position:absolute;left:50%;top:270px;transform:translateX(-50%);height:740px;background:#fff">
+</section>
+
+<!-- 6 -->
+<section>
+  <div class="c">
+    <h1 class="m">The AI reads.<br>The rules decide.</h1>
+    <div class="labels">
+      <div class="label">Every number must be in the document</div>
+      <div class="label">Net + VAT = Gross</div>
+      <div class="label">Anything unsure → a person</div>
+    </div>
+  </div>
+</section>
+
+<!-- 7 -->
+<section>
+  <div class="top"><h1>One screen for Jana and Thomas.</h1></div>
+  <img class="shot" src="img/review-list.png" alt="Review list" style="position:absolute;left:50%;top:290px;transform:translateX(-50%);width:1380px">
+</section>
+
+<!-- 8 -->
+<section>
+  <div class="top"><h1>The original, next to the fields.</h1></div>
+  <img class="shot" src="img/review-split.png" alt="Split view" style="position:absolute;left:50%;top:290px;transform:translateX(-50%);width:1380px">
+</section>
+
+<!-- 9 -->
+<section>
+  <div style="position:absolute;left:180px;top:0;bottom:0;width:820px;display:flex;flex-direction:column;justify-content:center">
+    <h1 class="s" style="line-height:1.1"><span style="color:var(--red)">Red</span> means fix.<br><span style="color:#c99a00">Amber</span> means check.</h1>
+  </div>
+  <img class="shot" src="img/review-flags.png" alt="Flagged fields" style="position:absolute;right:220px;top:50%;transform:translateY(-50%);height:860px;background:#fff">
+</section>
+
+<!-- 10 -->
+<section>
+  <div class="c">
+    <h1 class="m">Every change.<br><span style="color:var(--muted)">Who, when, before, after.</span></h1>
+    <p class="sub">Append-only audit log</p>
+  </div>
+</section>
+
+<!-- 11 -->
+<section>
+  <div class="c">
+    <h1 class="l">Fraud doesn't<br>book itself.</h1>
+    <div class="labels">
+      <div class="label"><i style="background:var(--red)"></i>Unknown supplier</div>
+      <div class="label"><i style="background:var(--red)"></i>Changed bank details</div>
+      <div class="label"><i style="background:var(--red)"></i>Look-alike sender</div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 -->
+<section class="dark">
+  <div class="c">
+    <h1 class="l">ERP down? <span style="color:var(--yellow)">It waits.</span></h1>
+    <img class="shot" src="img/erp-booked.png" alt="Retry then booked once" style="margin-top:80px;width:1140px;box-shadow:0 40px 100px rgba(0,0,0,.5)">
+    <p class="sub" style="margin-top:64px">Retries every 5 minutes · booked exactly once · Avanai gets one email</p>
+  </div>
+</section>
+
+<!-- 13 -->
+<section class="dark">
+  <div class="c">
+    <div class="kicker" style="color:#5c5c61"><span class="dot" style="background:var(--red)"></span>Now</div>
+    <h1 class="xl">Live demo</h1>
+  </div>
+</section>
+
+<!-- 14 -->
+<section>
+  <div class="c">
+    <h1 class="s">How we know it works</h1>
+    <div class="stats">
+      <div class="stat"><b>31</b><span>unit tests</span></div>
+      <div class="stat"><b>19/19</b><span>emails end to end</span></div>
+      <div class="stat"><b>25/26</b><span>invoice layouts</span></div>
+      <div class="stat"><b style="color:var(--green)">1×</b><span>booked after ERP outage</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 15 -->
+<section>
+  <div class="c">
+    <h1 class="l">Before go-live</h1>
+    <div class="labels" style="flex-wrap:nowrap">
+      <div class="label">Hallmann's ERP</div>
+      <div class="label">EU-hosted AI</div>
+      <div class="label">Dedicated mailbox</div>
+      <div class="label">Hosting + backups</div>
+      <div class="label">Supplier sync</div>
+    </div>
+  </div>
+</section>
+
+<!-- 16 -->
+<section>
+  <div class="c">
+    <h1 class="l">Next</h1>
+    <div class="timeline">
+      <div class="step"><div class="pt">1</div><p>Connect ERP,<br>mailbox, EU model</p></div>
+      <div class="step"><div class="pt">2</div><p>4&#8209;week pilot,<br>auto&#8209;booking off</p></div>
+      <div class="step"><div class="pt">3</div><p>Switch on,<br>supplier by supplier</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 -->
+<section>
+  <div class="c">
+    <h1 class="xl">Thank you.</h1>
+    <p class="sub">Questions</p>
+  </div>
+</section>
+
+</div>
+<script>
+(function(){
+  var s=[].slice.call(document.querySelectorAll('section')),i=0;
+  s.forEach(function(el,k){var n=document.createElement('div');n.className='num';n.textContent=k+1;el.appendChild(n)});
+  function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.forEach(function(el){el.style.transform='scale('+k+')'})}
+  function go(n){i=Math.max(0,Math.min(s.length-1,n));s.forEach(function(el,k){el.classList.toggle('active',k===i)});try{history.replaceState(null,'','#'+(i+1))}catch(e){}}
+  addEventListener('keydown',function(e){
+    if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].indexOf(e.key)>-1){e.preventDefault();go(i+1)}
+    else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].indexOf(e.key)>-1){e.preventDefault();go(i-1)}
+    else if(e.key==='Home')go(0);else if(e.key==='End')go(s.length-1);
+  });
+  addEventListener('click',function(e){go(e.clientX>innerWidth/3?i+1:i-1)});
+  addEventListener('resize',fit);fit();
+  go((parseInt(location.hash.slice(1),10)||1)-1);
+})();
+</script>
+</body>
+</html>
