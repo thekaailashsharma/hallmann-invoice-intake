@@ -47,6 +47,26 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
 .step:first-child .pt{background:var(--yellow);border-color:var(--yellow)}
 .step p{font-size:38px;font-weight:500;line-height:1.25;letter-spacing:-.01em;padding:0 30px}
 .step small{display:block;font-size:24px;color:var(--muted);margin-top:16px;font-weight:400;letter-spacing:.08em;text-transform:uppercase}
+.bento{position:absolute;left:120px;right:120px;top:270px;bottom:110px;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);gap:28px}
+.tile{background:#fff;border-radius:36px;padding:44px 46px;box-shadow:0 2px 0 rgba(0,0,0,.03),0 18px 50px rgba(28,28,30,.07);display:flex;flex-direction:column;justify-content:flex-end;position:relative;overflow:hidden}
+.tile .ic{position:absolute;top:40px;left:44px;font-size:64px;line-height:1}
+.tile h3{font-size:44px;font-weight:600;letter-spacing:-.02em;line-height:1.08}
+.tile p{font-size:26px;color:var(--muted);margin-top:14px;line-height:1.3}
+.tile.big{grid-column:span 2;grid-row:span 2;background:var(--dark);color:#f6f4ee}
+.tile.big h3{font-size:88px;line-height:1.02}
+.tile.big p{font-size:32px;color:#9a9aa0}
+.tile.y{background:var(--yellow)} .tile.y p{color:#6b5300}
+.tile.g{background:#e7f3ea} .tile.g h3{color:var(--green)}
+.tile.wide{grid-column:span 2}
+.flows{position:absolute;left:120px;right:120px;top:260px;bottom:90px;display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);gap:24px}
+.flow{background:#fff;border-radius:30px;padding:30px 36px;box-shadow:0 2px 0 rgba(0,0,0,.03),0 14px 40px rgba(28,28,30,.06);display:flex;flex-direction:column;justify-content:center}
+.flow h4{font-size:24px;font-weight:600;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:14px}
+.flow h4 i{width:16px;height:16px;border-radius:50%;background:var(--yellow);display:inline-block}
+.chain{display:flex;align-items:center;gap:14px;flex-wrap:nowrap}
+.chip{background:var(--bg);border-radius:16px;padding:14px 20px;font-size:27px;font-weight:500;white-space:nowrap}
+.chip.k{background:var(--dark);color:#fff}
+.chain b{font-weight:400;color:var(--muted);font-size:28px}
+.flow.full{grid-column:span 2;background:var(--dark);color:#f6f4ee} .flow.full .chip{background:#2c2c2f;color:#f6f4ee} .flow.full h4{color:#9a9aa0}
 @media print{
   @page{size:1920px 1080px;margin:0}
   html,body{background:none}
@@ -64,7 +84,7 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
   <div class="c">
     <div class="kicker"><span class="dot"></span>Readout</div>
     <h1 class="xl">Invoice intake</h1>
-    <p class="sub">Hallmann Maschinenbau × Avanai · 30 Oct</p>
+    <p class="sub">Hallmann Maschinenbau × Avanai</p>
   </div>
 </section>
 
@@ -72,7 +92,7 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
 <section>
   <div class="c">
     <h1 class="l">Most of the week,<br>typing invoices.</h1>
-    <p class="sub">Jana and Thomas · several hundred a month</p>
+    <p class="sub">Jana and Thomas · every invoice, by hand</p>
   </div>
 </section>
 
@@ -108,6 +128,30 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
       <div class="label">Net + VAT = Gross</div>
       <div class="label">Anything unsure → a person</div>
     </div>
+  </div>
+</section>
+
+<!-- bento: what it does -->
+<section>
+  <div class="top"><h1>Everything Sabine asked for.</h1></div>
+  <div class="bento">
+    <div class="tile big"><div class="ic">📏</div><h3>The AI reads.<br>The rules decide.</h3><p>Every number checked against the document before anything is booked.</p></div>
+    <div class="tile y"><div class="ic">🔁</div><h3>Duplicates caught</h3><p>Even when written differently</p></div>
+    <div class="tile"><div class="ic">📨</div><h3>Reminders never booked</h3><p>Recorded, set aside</p></div>
+    <div class="tile"><div class="ic">↪️</div><h3>Forwards and credit notes</h3><p>Read like any invoice</p></div>
+    <div class="tile g"><div class="ic">🇩🇪</div><h3>German and English</h3><p>Formats, dates, words</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="top"><h1>Built for the people who check.</h1></div>
+  <div class="bento">
+    <div class="tile wide y"><div class="ic">👩‍💼</div><h3>One simple screen</h3><p>What is open, and why. Not another Excel.</p></div>
+    <div class="tile"><div class="ic">📄</div><h3>Original PDF</h3><p>Next to the fields</p></div>
+    <div class="tile"><div class="ic">🔒</div><h3>Google sign-in</h3><p>Clerk, lead, admin</p></div>
+    <div class="tile"><div class="ic">🧾</div><h3>Audit log</h3><p>Who, when, before, after</p></div>
+    <div class="tile g"><div class="ic">⏳</div><h3>ERP down</h3><p>It waits, then books once</p></div>
+    <div class="tile wide" style="background:var(--dark);color:#f6f4ee"><div class="ic">🔔</div><h3>Sabine hears it from Avanai</h3><p style="color:#9a9aa0">Not from a supplier asking why they haven't been paid.</p></div>
   </div>
 </section>
 
@@ -156,7 +200,19 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
   <div class="c">
     <h1 class="l">ERP down? <span style="color:var(--yellow)">It waits.</span></h1>
     <img class="shot" src="img/erp-booked.png" alt="Retry then booked once" style="margin-top:80px;width:1140px;box-shadow:0 40px 100px rgba(0,0,0,.5)">
-    <p class="sub" style="margin-top:64px">Retries every 5 minutes · booked exactly once · Avanai gets one email</p>
+    <p class="sub" style="margin-top:64px">Retries on its own · booked exactly once · Avanai gets an email</p>
+  </div>
+</section>
+
+<!-- workflows -->
+<section>
+  <div class="top"><h1>Behind the scenes, in n8n.</h1></div>
+  <div class="flows">
+    <div class="flow"><h4><i></i>Invoice Intake</h4><div class="chain"><span class="chip">📥 Mailbox</span><b>→</b><span class="chip">💾 Store first</span><b>→</b><span class="chip">↪ Hand over</span></div></div>
+    <div class="flow"><h4><i></i>Process Email</h4><div class="chain"><span class="chip">📄 Read</span><b>→</b><span class="chip">🛡️ Guard</span><b>→</b><span class="chip">🤖 AI reads</span><b>→</b><span class="chip k">📏 Rules</span></div></div>
+    <div class="flow"><h4><i></i>ERP Booking</h4><div class="chain"><span class="chip">🔐 Claim</span><b>→</b><span class="chip">🏦 Send to ERP</span><b>→</b><span class="chip">✅ Booked once</span></div></div>
+    <div class="flow"><h4><i></i>Review Decision</h4><div class="chain"><span class="chip">👩‍💼 Screen</span><b>→</b><span class="chip">📏 Same rules</span><b>→</b><span class="chip">🧾 Audit</span><b>→</b><span class="chip">🏦 ERP</span></div></div>
+    <div class="flow full"><h4><i></i>Monitoring</h4><div class="chain"><span class="chip">⚠️ Any failure</span><b>+</b><span class="chip">⏱ Watchdog</span><b>→</b><span class="chip">🔔 One alert</span><b>→</b><span class="chip">📧 Avanai on-call</span></div></div>
   </div>
 </section>
 
@@ -170,14 +226,13 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
 
 <!-- 14 -->
 <section>
-  <div class="c">
-    <h1 class="s">How we know it works</h1>
-    <div class="stats">
-      <div class="stat"><b>31</b><span>unit tests</span></div>
-      <div class="stat"><b>19/19</b><span>emails end to end</span></div>
-      <div class="stat"><b>25/26</b><span>invoice layouts</span></div>
-      <div class="stat"><b style="color:var(--green)">1×</b><span>booked after ERP outage</span></div>
-    </div>
+  <div class="top"><h1>How we know it works.</h1></div>
+  <div class="bento">
+    <div class="tile big"><div class="ic">📬</div><h3>Every sample email, end to end.</h3><p>Through a real mailbox, one at a time, each landing where it should.</p></div>
+    <div class="tile"><div class="ic">🧪</div><h3>Rules unit-tested</h3><p>Every check, every format</p></div>
+    <div class="tile y"><div class="ic">🗂️</div><h3>Real-world layouts</h3><p>Tables, multi-page, e-invoices</p></div>
+    <div class="tile g"><div class="ic">🔌</div><h3>ERP switched off</h3><p>Nothing lost, booked once</p></div>
+    <div class="tile"><div class="ic">✉️</div><h3>Real Gmail</h3><p>Tested on a live account</p></div>
   </div>
 </section>
 
@@ -200,9 +255,9 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
   <div class="c">
     <h1 class="l">Next</h1>
     <div class="timeline">
-      <div class="step"><div class="pt">1</div><p>Connect ERP,<br>mailbox, EU model</p></div>
-      <div class="step"><div class="pt">2</div><p>4&#8209;week pilot,<br>auto&#8209;booking off</p></div>
-      <div class="step"><div class="pt">3</div><p>Switch on,<br>supplier by supplier</p></div>
+      <div class="step"><div class="pt"></div><p>Connect ERP,<br>mailbox, EU model</p></div>
+      <div class="step"><div class="pt"></div><p>Pilot with<br>auto&#8209;booking off</p></div>
+      <div class="step"><div class="pt"></div><p>Switch on,<br>supplier by supplier</p></div>
     </div>
   </div>
 </section>
@@ -219,7 +274,6 @@ h1{font-weight:600;letter-spacing:-.035em;line-height:1.02}
 <script>
 (function(){
   var s=[].slice.call(document.querySelectorAll('section')),i=0;
-  s.forEach(function(el,k){var n=document.createElement('div');n.className='num';n.textContent=k+1;el.appendChild(n)});
   function fit(){var k=Math.min(innerWidth/1920,innerHeight/1080);s.forEach(function(el){el.style.transform='scale('+k+')'})}
   function go(n){i=Math.max(0,Math.min(s.length-1,n));s.forEach(function(el,k){el.classList.toggle('active',k===i)});try{history.replaceState(null,'','#'+(i+1))}catch(e){}}
   addEventListener('keydown',function(e){
